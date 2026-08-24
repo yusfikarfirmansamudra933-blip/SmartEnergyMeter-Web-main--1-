@@ -1,0 +1,449 @@
+<!DOCTYPE html>
+<html lang="id">
+
+<head>
+
+    <meta charset="UTF-8">
+
+    <meta name="viewport"
+          content="width=device-width, initial-scale=1">
+
+    <title>Smart Energy Meter</title>
+
+   <link rel="manifest" href="/SmartEnergyMeter-Web/manifest.json">
+
+    <link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <header>
+
+        <div>
+
+            <h1>SMART ENERGY METER</h1>
+
+            <p>Industrial IoT Monitoring</p>
+            <button id="installBtn" style="display:none;">
+            📲 INSTALL APP
+        </button>
+
+        </div>
+
+        <div class="status">
+
+            <span id="wifiLed"></span>
+
+            <span id="wifiText">
+                Connecting...
+            </span>
+
+        </div>
+
+        <div class="clockArea">
+
+            <span id="clock">
+                00:00:00
+            </span>
+
+        </div>
+
+    </header>
+
+
+    <!-- DATA CARDS -->
+    <section class="cards">
+
+        <div class="card">
+
+            <h3>Voltage</h3>
+
+            <h2 id="voltage">0</h2>
+
+            <p>Volt</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Current</h3>
+
+            <h2 id="current">0</h2>
+
+            <p>Ampere</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Power</h3>
+
+            <h2 id="power">0</h2>
+
+            <p>Watt</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Energy</h3>
+
+            <h2 id="energy">0</h2>
+
+            <p>kWh</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Frequency</h3>
+
+            <h2 id="frequency">0</h2>
+
+            <p>Hz</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Power Factor</h3>
+
+            <h2 id="pf">0</h2>
+
+            <p>PF</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Apparent Power</h3>
+
+            <h2 id="va">0</h2>
+
+            <p>VA</p>
+
+        </div>
+
+
+        <div class="card">
+
+            <h3>Reactive Power</h3>
+
+            <h2 id="var">0</h2>
+
+            <p>VAR</p>
+
+        </div>
+
+    </section>
+
+
+    <!-- POWER GAUGE -->
+    <section class="gaugeCard">
+
+        <h2>
+            Realtime Power
+        </h2>
+
+        <div class="gaugeContainer">
+
+            <svg
+                width="260"
+                height="260"
+                viewBox="0 0 260 260">
+
+                <circle
+                    cx="130"
+                    cy="130"
+                    r="100"
+                    stroke="#23304b"
+                    stroke-width="18"
+                    fill="none"/>
+
+                <circle
+                    id="powerGauge"
+                    cx="130"
+                    cy="130"
+                    r="100"
+                    stroke="#3b82f6"
+                    stroke-width="18"
+                    fill="none"
+                    stroke-linecap="round"
+                    stroke-dasharray="628"
+                    stroke-dashoffset="628"
+                    transform="rotate(-90 130 130)"/>
+
+            </svg>
+
+
+            <div class="gaugeText">
+
+                <h1 id="gaugeValue">
+                    0W
+                </h1>
+
+                <p>
+                    Realtime Power
+                </p>
+
+            </div>
+
+        </div>
+
+    </section>
+
+
+    <!-- POWER STATUS -->
+    <section class="statusCard">
+
+        <h3>Power</h3>
+
+        <h1 id="percent">
+            0%
+        </h1>
+
+    </section>
+
+
+    <!-- PZEM STATUS -->
+    <section class="statusCard">
+
+        <h3>PZEM</h3>
+
+        <h1 id="pzemStatus">
+            ONLINE
+        </h1>
+
+    </section>
+
+
+   <!-- SETTINGS -->
+<section class="setting">
+
+    <h2>
+        Power Limiter
+    </h2>
+
+    <h3 id="test">
+        700 W
+    </h3>
+
+    <input
+        id="limitInput"
+        type="number"
+        min="100"
+        max="10000"
+        placeholder="Limit Watt">
+
+
+    <button
+        id="saveLimitBtn"
+        onclick="saveLimit()">
+
+        Save Limit
+
+    </button>
+
+    <button
+        id="reconnect"
+        onclick="connectWebSocket()">
+
+        RECONNECT
+
+    </button>
+
+
+    <button
+        id="restartBtn"
+        onclick="restartESP()">
+
+        Restart ESP
+
+    </button>
+
+
+    <button
+        id="factoryBtn"
+        onclick="factoryReset()">
+
+        Factory Reset
+
+    </button>
+
+</section>
+
+
+    <!-- GRAPH -->
+    <section class="chartCard">
+
+        <h2>
+            Realtime Graph
+        </h2>
+
+        <canvas id="powerChart"></canvas>
+
+    </section>
+
+
+    <!-- SYSTEM STATUS -->
+    <section class="statusCard">
+
+        <div class="statusItem">
+
+            Dashboard
+
+            <span id="fps">
+                0 Hz
+            </span>
+
+        </div>
+
+
+        <div class="statusItem">
+
+            Connection
+
+            <span id="connectionText">
+                Excellent
+            </span>
+
+        </div>
+
+    </section>
+
+</div>
+
+
+<!-- CHART.JS -->
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+
+<!-- MQTT.JS -->
+
+
+<!-- SCRIPT UTAMA -->
+<script src="script.js"></script>
+
+
+<!-- SERVICE WORKER -->
+<script>
+
+if ('serviceWorker' in navigator) {
+
+    window.addEventListener('load', function () {
+
+        navigator.serviceWorker.register(
+            'service-worker.js'
+        )
+        .then(function () {
+
+            console.log(
+                'Service Worker berhasil terdaftar'
+            );
+
+        })
+        .catch(function (error) {
+
+            console.error(
+                'Service Worker gagal:',
+                error
+            );
+
+        });
+
+    });
+
+}
+
+</script>
+<!-- PWA INSTALL -->
+<script>
+
+let deferredPrompt;
+
+const installBtn = document.getElementById("installBtn");
+
+window.addEventListener("beforeinstallprompt", (event) => {
+
+    // Mencegah browser menampilkan prompt otomatis
+    event.preventDefault();
+
+    // Simpan event untuk digunakan saat tombol ditekan
+    deferredPrompt = event;
+
+    // Tampilkan tombol install
+    installBtn.style.display = "inline-block";
+
+});
+
+
+installBtn.addEventListener("click", async () => {
+
+    if (!deferredPrompt) {
+        return;
+    }
+
+    // Tampilkan dialog instalasi
+    deferredPrompt.prompt();
+
+    // Tunggu pilihan pengguna
+    const { outcome } = await deferredPrompt.userChoice;
+
+    console.log(
+        "Hasil instalasi:",
+        outcome
+    );
+
+    // Event hanya bisa digunakan sekali
+    deferredPrompt = null;
+
+    // Sembunyikan tombol
+    installBtn.style.display = "none";
+
+});
+
+
+window.addEventListener("appinstalled", () => {
+
+    console.log(
+        "Smart Energy Meter berhasil di-install"
+    );
+
+    installBtn.style.display = "none";
+
+});
+
+</script>
+<!-- TAGIHAN LISTRIK -->
+
+<a href="bill.html"
+   class="project-card">
+
+    <h3>
+        💰 Tagihan Listrik Bulanan
+    </h3>
+
+    <p>
+        Lihat tagihan listrik
+        setiap bulan
+    </p>
+
+    <strong>
+        Buka Tagihan →
+    </strong>
+
+</a>
+
+</body>
+
+</html>

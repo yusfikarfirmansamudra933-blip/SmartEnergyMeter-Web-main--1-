@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+
+<html>
+
+<head>
+
+<meta charset="utf-8">
+
+<title>Login</title>
+
+<link rel="stylesheet" href="style.css">
+
+</head>
+
+<body>
+
+<div class="loginBox">
+
+<h1>
+
+SMART ENERGY
+
+</h1>
+
+<input
+id="username"
+placeholder="Username">
+
+<input
+id="password"
+type="password"
+placeholder="Password">
+
+<button
+onclick="login()">
+
+LOGIN
+
+</button>
+
+</div>
+
+<script>
+
+function login(){
+
+let u=document
+.getElementById("username").value;
+
+let p=document
+.getElementById("password").value;
+
+fetch("/login",{
+
+method:"POST",
+
+headers:{
+
+'Content-Type':'application/json'
+
+},
+
+body:JSON.stringify({
+
+username:u,
+
+password:p
+
+})
+
+})
+
+.then(r=>r.text())
+
+.then(res=>{
+
+if(res=="OK")
+
+location.href="/";
+
+else
+
+alert("Login Gagal");
+
+});
+
+}
+
+</script>
+
+</body>
+
+</html>

@@ -1,0 +1,1456 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tagihan Listrik Bulanan</title>
+    <link rel="stylesheet" href="style.css">
+    <style>
+        /* =====================================================
+           TEMA TAGIHAN LISTRIK - DARK DASHBOARD
+        ====================================================== */
+
+        body {
+            background: #0f172a;
+            color: #e5e7eb;
+        }
+
+        .container {
+            color: #e5e7eb;
+        }
+
+        header {
+            background: #111827;
+            color: #f8fafc;
+            border: 1px solid #1f2937;
+            border-radius: 18px;
+            padding: 20px 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.25);
+        }
+
+        header h1,
+        header p {
+            color: #f8fafc;
+        }
+
+        .clockArea {
+            color: #38bdf8;
+        }
+
+        .setting button {
+            background: #1e293b;
+            color: #e5e7eb;
+            border: 1px solid #334155;
+            border-radius: 10px;
+            padding: 10px 16px;
+            cursor: pointer;
+        }
+
+        .setting button:hover {
+            background: #334155;
+        }
+
+        .chartCard {
+            background: #111827;
+            color: #e5e7eb;
+            border: 1px solid #1f2937;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 10px 30px rgba(0,0,0,.22);
+        }
+
+        .chartCard h2,
+        .chartCard p {
+            color: #f8fafc;
+        }
+
+        .chartCard > p {
+            color: #94a3b8;
+        }
+
+        /* =========================
+           12 CARD BULAN
+        ========================== */
+
+        .months-grid {
+            display: grid;
+            grid-template-columns: repeat(4, minmax(0, 1fr));
+            gap: 18px;
+            margin-top: 25px;
+        }
+
+        .month-card {
+            border: 1px solid #334155;
+            border-radius: 16px;
+            padding: 22px 20px;
+            min-height: 145px;
+            cursor: pointer;
+            text-align: left;
+            background: #1e293b;
+            color: #e5e7eb;
+            box-shadow: 0 8px 25px rgba(0,0,0,.20);
+            transition:
+                transform .2s ease,
+                box-shadow .2s ease,
+                border-color .2s ease,
+                background .2s ease;
+        }
+
+        .month-card:hover {
+            transform: translateY(-4px);
+            background: #243247;
+            border-color: #38bdf8;
+            box-shadow: 0 12px 30px rgba(0,0,0,.30);
+        }
+
+        .month-card:active {
+            transform: translateY(-1px);
+        }
+
+        .month-card h3 {
+            margin: 0 0 12px;
+            font-size: 21px;
+            color: #f8fafc;
+        }
+
+        .month-card .month-total {
+            font-size: 23px;
+            font-weight: 700;
+            margin-bottom: 8px;
+            color: #38bdf8;
+        }
+
+        .month-card small {
+            color: #94a3b8;
+        }
+
+        /* =========================
+           POPUP
+        ========================== */
+
+        .month-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 9999;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            background: rgba(2, 6, 23, .78);
+            backdrop-filter: blur(6px);
+        }
+
+        .month-overlay.show {
+            display: flex;
+        }
+
+        .month-modal {
+            width: min(850px, 100%);
+            max-height: 90vh;
+            overflow-y: auto;
+            background: #111827;
+            color: #e5e7eb;
+            border: 1px solid #334155;
+            border-radius: 20px;
+            padding: 28px;
+            box-shadow: 0 25px 70px rgba(0,0,0,.55);
+            position: relative;
+            animation: modalIn .18s ease-out;
+        }
+
+        @keyframes modalIn {
+            from {
+                opacity: 0;
+                transform: translateY(15px) scale(.98);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+
+        .modal-header h2 {
+            margin: 0;
+            color: #f8fafc;
+        }
+
+        .modal-header p {
+            color: #94a3b8;
+        }
+
+        .close-modal {
+            width: 42px;
+            height: 42px;
+            border: 1px solid #334155;
+            border-radius: 50%;
+            cursor: pointer;
+            font-size: 25px;
+            background: #1e293b;
+            color: #e5e7eb;
+        }
+
+        .close-modal:hover {
+            background: #334155;
+        }
+
+        .week-list {
+            display: grid;
+            gap: 12px;
+        }
+
+        .week-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            align-items: center;
+            gap: 15px;
+            padding: 17px 18px;
+            border: 1px solid #293548;
+            border-radius: 14px;
+            background: #1e293b;
+        }
+
+        .week-row strong {
+            display: block;
+            margin-bottom: 5px;
+            color: #f8fafc;
+        }
+
+        .week-row small {
+            color: #94a3b8;
+        }
+
+        .week-bill {
+            font-weight: 700;
+            font-size: 18px;
+            text-align: right;
+            color: #38bdf8;
+        }
+
+        .empty-week {
+            text-align: center;
+            padding: 25px;
+            color: #94a3b8;
+        }
+
+        @media (max-width: 900px) {
+            .months-grid {
+                grid-template-columns: repeat(3, minmax(0, 1fr));
+            }
+        }
+
+        @media (max-width: 650px) {
+            .months-grid {
+                grid-template-columns: repeat(2, minmax(0, 1fr));
+            }
+
+            .month-modal {
+                padding: 20px;
+            }
+        }
+
+        @media (max-width: 420px) {
+            .months-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+<div class="container">
+
+    <!-- HEADER -->
+    <header>
+        <div>
+            <h1>TAGIHAN LISTRIK</h1>
+            <p>Tagihan listrik per bulan</p>
+        </div>
+
+        <div class="clockArea">
+            <span id="clock">00:00:00</span>
+        </div>
+    </header>
+
+    <!-- KEMBALI -->
+    <section class="setting">
+        <button type="button" id="backButton">
+            ← Kembali ke Dashboard
+        </button>
+    </section>
+
+    <!-- 12 BULAN -->
+   <section class="chartCard">
+
+    <h2>Tagihan Listrik Bulanan</h2>
+
+    <p>
+        Pilih bulan untuk melihat rincian tagihan setiap minggu.
+    </p>
+
+    <div class="months-grid">
+
+        <button class="month-card" data-month="Januari">
+            <h3>Januari</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Februari">
+            <h3>Februari</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Maret">
+            <h3>Maret</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="April">
+            <h3>April</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Mei">
+            <h3>Mei</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Juni">
+            <h3>Juni</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Juli">
+            <h3>Juli</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Agustus">
+            <h3>Agustus</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="September">
+            <h3>September</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Oktober">
+            <h3>Oktober</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="November">
+            <h3>November</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+        <button class="month-card" data-month="Desember">
+            <h3>Desember</h3>
+            <div class="month-total">Rp0</div>
+            <small>Klik untuk melihat rincian</small>
+        </button>
+
+    </div>
+
+</section>
+
+</div>
+
+
+<!-- =========================
+     POPUP RINCIAN BULAN
+========================== -->
+
+<div
+    id="monthOverlay"
+    class="month-overlay"
+    aria-hidden="true"
+>
+    <div
+        class="month-modal"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="modalMonthTitle"
+    >
+
+        <div class="modal-header">
+            <div>
+                <h2 id="modalMonthTitle">Januari</h2>
+                <p id="modalMonthSummary">Rincian tagihan mingguan</p>
+            </div>
+
+            <button
+                type="button"
+                id="closeModal"
+                class="close-modal"
+                aria-label="Tutup"
+            >
+                ×
+            </button>
+        </div>
+
+        <div id="weekList" class="week-list"></div>
+
+    </div>
+</div>
+
+
+<!-- MQTT -->
+
+<script>
+"use strict";
+
+/* =========================================================
+   KONFIGURASI MQTT
+========================================================= */
+
+const TOPIC_DATA = "smartmeter/data";
+const MQTT_HOST = "";
+const MQTT_OPTIONS = {};
+
+const mqtt = {
+    connect() {
+        const handlers = {};
+        const client = {
+            on(event, handler) { handlers[event] = handler; },
+            subscribe(_topic, callback) { if (callback) callback(null); }
+        };
+
+        window.setTimeout(() => {
+            if (handlers.connect) handlers.connect();
+        }, 0);
+
+        window.setInterval(async () => {
+            try {
+                const response = await fetch("/api/status");
+                if (!response.ok) throw new Error("Status request failed");
+                const status = await response.json();
+                if (handlers.message) handlers.message(TOPIC_DATA, JSON.stringify(status));
+            } catch (error) {
+                if (handlers.error) handlers.error(error);
+            }
+        }, 1000);
+
+        return client;
+    }
+};
+
+
+/* =========================================================
+   DOM
+========================================================= */
+
+const monthsGrid =
+    document.getElementById("monthsGrid");
+
+const monthOverlay =
+    document.getElementById("monthOverlay");
+
+const closeModal =
+    document.getElementById("closeModal");
+
+const modalMonthTitle =
+    document.getElementById("modalMonthTitle");
+
+const modalMonthSummary =
+    document.getElementById("modalMonthSummary");
+
+const weekList =
+    document.getElementById("weekList");
+
+const clockEl =
+    document.getElementById("clock");
+
+const backButton =
+    document.getElementById("backButton");
+
+
+/* =========================================================
+   DATA
+========================================================= */
+
+const monthNames = [
+    "Januari",
+    "Februari",
+    "Maret",
+    "April",
+    "Mei",
+    "Juni",
+    "Juli",
+    "Agustus",
+    "September",
+    "Oktober",
+    "November",
+    "Desember"
+];
+
+let monthlyData = readObject("monthlyElectricity");
+let weeklyData = readObject("weeklyElectricity");
+
+
+function readObject(key) {
+    try {
+        const value =
+            JSON.parse(
+                localStorage.getItem(key) || "{}"
+            );
+
+        return value &&
+               typeof value === "object"
+            ? value
+            : {};
+    } catch (error) {
+        console.error(
+            "Gagal membaca",
+            key,
+            error
+        );
+
+        return {};
+    }
+}
+
+
+/* =========================================================
+   FORMAT
+========================================================= */
+
+function formatRupiah(value) {
+    return new Intl.NumberFormat(
+        "id-ID",
+        {
+            style: "currency",
+            currency: "IDR",
+            maximumFractionDigits: 0
+        }
+    ).format(Number(value) || 0);
+}
+
+
+/* =========================================================
+   TARIF
+   Hanya dibaca untuk perhitungan.
+   Tidak ada input tarif di halaman ini.
+========================================================= */
+
+function getElectricityRate() {
+    const rate =
+        Number(
+            localStorage.getItem(
+                "electricityRate"
+            )
+        );
+
+    return Number.isFinite(rate) && rate > 0
+        ? rate
+        : 1500;
+}
+
+
+/* =========================================================
+   KEY BULAN
+========================================================= */
+
+function monthKey(year, monthIndex) {
+    return (
+        year +
+        "-" +
+        String(monthIndex + 1).padStart(2, "0")
+    );
+}
+
+
+/* =========================================================
+   HITUNG TOTAL BULAN
+========================================================= */
+
+function getMonthTotal(
+    year,
+    monthIndex
+) {
+    const key =
+        monthKey(
+            year,
+            monthIndex
+        );
+
+    /*
+       Jika data mingguan tersedia,
+       jumlahkan tagihan mingguannya.
+    */
+
+    const weeks =
+        weeklyData[key];
+
+    if (
+        weeks &&
+        typeof weeks === "object"
+    ) {
+        let total = 0;
+
+        for (
+            let week = 1;
+            week <= 5;
+            week++
+        ) {
+            total +=
+                Number(
+                    weeks["week" + week] || 0
+                );
+        }
+
+        return total;
+    }
+
+    /*
+       Fallback:
+       gunakan data bulanan lama jika ada.
+    */
+
+    const energy =
+        Number(
+            monthlyData[key] || 0
+        );
+
+    return (
+        energy *
+        getElectricityRate()
+    );
+}
+
+
+/* =========================================================
+   BUAT 12 CARD
+========================================================= */
+
+function renderMonthCards() {
+
+    monthsGrid.innerHTML = "";
+
+    const year =
+        new Date().getFullYear();
+
+    for (
+        let month = 0;
+        month < 12;
+        month++
+    ) {
+
+        const card =
+            document.createElement("button");
+
+        card.type = "button";
+        card.className = "month-card";
+
+        const total =
+            getMonthTotal(
+                year,
+                month
+            );
+
+        card.innerHTML =
+            "<h3>" +
+            monthNames[month] +
+            "</h3>" +
+
+            "<div class=\"month-total\">" +
+            formatRupiah(total) +
+            "</div>" +
+
+            "<small>Klik untuk melihat tagihan mingguan →</small>";
+
+        card.addEventListener(
+            "click",
+            function () {
+
+                openMonth(
+                    year,
+                    month
+                );
+
+            }
+        );
+
+        monthsGrid.appendChild(card);
+    }
+}
+
+
+/* =========================================================
+   BUAT DATA MINGGU
+========================================================= */
+
+function getWeeklyBills(
+    year,
+    monthIndex
+) {
+
+    const key =
+        monthKey(
+            year,
+            monthIndex
+        );
+
+    const saved =
+        weeklyData[key];
+
+    /*
+       Jika data mingguan sudah ada,
+       gunakan data tersebut.
+    */
+
+    if (
+        saved &&
+        typeof saved === "object"
+    ) {
+
+        return [
+            Number(saved.week1 || 0),
+            Number(saved.week2 || 0),
+            Number(saved.week3 || 0),
+            Number(saved.week4 || 0),
+            Number(saved.week5 || 0)
+        ];
+
+    }
+
+    /*
+       Belum ada data mingguan.
+       Buat lima minggu dengan nilai 0.
+    */
+
+    return [
+        0,
+        0,
+        0,
+        0,
+        0
+    ];
+}
+
+
+/* =========================================================
+   BUKA POPUP BULAN
+========================================================= */
+
+function openMonth(
+    year,
+    monthIndex
+) {
+
+    const bills =
+        getWeeklyBills(
+            year,
+            monthIndex
+        );
+
+    const total =
+        bills.reduce(
+            function (sum, value) {
+                return sum + value;
+            },
+            0
+        );
+
+    modalMonthTitle.textContent =
+        monthNames[monthIndex] +
+        " " +
+        year;
+
+    modalMonthSummary.textContent =
+        "Total bulan ini: " +
+        formatRupiah(total);
+
+    weekList.innerHTML = "";
+
+    let hasData = false;
+
+    for (
+        let i = 0;
+        i < 5;
+        i++
+    ) {
+
+        const bill =
+            Number(
+                bills[i] || 0
+            );
+
+        const row =
+            document.createElement("div");
+
+        row.className =
+            "week-row";
+
+        const left =
+            document.createElement("div");
+
+        const title =
+            document.createElement("strong");
+
+        title.textContent =
+            "Minggu " +
+            (i + 1);
+
+        const date =
+            document.createElement("small");
+
+        const start =
+            new Date(
+                year,
+                monthIndex,
+                1 + (i * 7)
+            );
+
+        const end =
+            new Date(
+                year,
+                monthIndex,
+                Math.min(
+                    1 + (i * 7) + 6,
+                    new Date(
+                        year,
+                        monthIndex + 1,
+                        0
+                    ).getDate()
+                )
+            );
+
+        date.textContent =
+            start.toLocaleDateString(
+                "id-ID"
+            ) +
+            " - " +
+            end.toLocaleDateString(
+                "id-ID"
+            );
+
+        left.appendChild(title);
+        left.appendChild(date);
+
+        const right =
+            document.createElement("div");
+
+        right.className =
+            "week-bill";
+
+        right.textContent =
+            formatRupiah(bill);
+
+        row.appendChild(left);
+        row.appendChild(right);
+
+        weekList.appendChild(row);
+
+        if (bill > 0) {
+            hasData = true;
+        }
+    }
+
+    if (!hasData) {
+        const note =
+            document.createElement("div");
+
+        note.className =
+            "empty-week";
+
+        note.textContent =
+            "Belum ada data tagihan mingguan untuk bulan ini.";
+
+        weekList.appendChild(note);
+    }
+
+    monthOverlay.classList.add("show");
+    monthOverlay.setAttribute(
+        "aria-hidden",
+        "false"
+    );
+
+    document.body.style.overflow =
+        "hidden";
+}
+
+
+/* =========================================================
+   TUTUP POPUP
+========================================================= */
+
+function closeMonth() {
+
+    monthOverlay.classList.remove(
+        "show"
+    );
+
+    monthOverlay.setAttribute(
+        "aria-hidden",
+        "true"
+    );
+
+    document.body.style.overflow =
+        "";
+}
+
+
+closeModal.addEventListener(
+    "click",
+    closeMonth
+);
+
+
+monthOverlay.addEventListener(
+    "click",
+    function (event) {
+
+        if (
+            event.target ===
+            monthOverlay
+        ) {
+            closeMonth();
+        }
+
+    }
+);
+
+
+document.addEventListener(
+    "keydown",
+    function (event) {
+
+        if (
+            event.key === "Escape"
+        ) {
+            closeMonth();
+        }
+
+    }
+);
+
+
+/* =========================================================
+   SIMPAN DATA MINGGUAN DARI MQTT
+========================================================= */
+
+function saveWeeklyEnergy(
+    energy
+) {
+
+    if (
+        !Number.isFinite(energy)
+    ) {
+        return;
+    }
+
+    const now =
+        new Date();
+
+    const year =
+        now.getFullYear();
+
+    const monthIndex =
+        now.getMonth();
+
+    const key =
+        monthKey(
+            year,
+            monthIndex
+        );
+
+    /*
+       Tentukan minggu 1-5.
+       Tanggal 1-7 = minggu 1
+       Tanggal 8-14 = minggu 2
+       Tanggal 15-21 = minggu 3
+       Tanggal 22-28 = minggu 4
+       Tanggal 29-31 = minggu 5
+    */
+
+    const week =
+        Math.min(
+            Math.floor(
+                (now.getDate() - 1) / 7
+            ) + 1,
+            5
+        );
+
+    /*
+       Simpan energi awal minggu.
+    */
+
+    let starts =
+        readObject(
+            "weeklyEnergyStart"
+        );
+
+    if (
+        starts[key] === undefined
+    ) {
+        starts[key] = {};
+    }
+
+    if (
+        starts[key]["week" + week] === undefined
+    ) {
+
+        starts[key]["week" + week] =
+            energy;
+
+        localStorage.setItem(
+            "weeklyEnergyStart",
+            JSON.stringify(starts)
+        );
+    }
+
+    const startEnergy =
+        Number(
+            starts[key]["week" + week]
+        );
+
+    let usedEnergy =
+        energy -
+        startEnergy;
+
+    if (
+        usedEnergy < 0
+    ) {
+
+        starts[key]["week" + week] =
+            energy;
+
+        usedEnergy = 0;
+
+        localStorage.setItem(
+            "weeklyEnergyStart",
+            JSON.stringify(starts)
+        );
+    }
+
+    /*
+       Simpan PEMAKAIAN mingguan
+       dalam kWh.
+    */
+
+    if (
+        !weeklyData[key]
+    ) {
+        weeklyData[key] = {};
+    }
+
+    weeklyData[key]["week" + week] =
+        usedEnergy *
+        getElectricityRate();
+
+    localStorage.setItem(
+        "weeklyElectricity",
+        JSON.stringify(weeklyData)
+    );
+
+    /*
+       Update card bulan.
+    */
+
+    renderMonthCards();
+}
+
+
+/* =========================================================
+   MQTT
+========================================================= */
+
+let mqttClient = null;
+
+function connectMQTT() {
+
+    if (
+        typeof mqtt === "undefined"
+    ) {
+
+        console.error(
+            "Library MQTT tidak ditemukan."
+        );
+
+        return;
+    }
+
+    mqttClient =
+        mqtt.connect(
+            MQTT_HOST,
+            MQTT_OPTIONS
+        );
+
+    mqttClient.on(
+        "connect",
+        function () {
+
+            console.log(
+                "BILL MONTHLY MQTT CONNECTED"
+            );
+
+            mqttClient.subscribe(
+                TOPIC_DATA,
+                function (error) {
+
+                    if (error) {
+
+                        console.error(
+                            "MQTT SUBSCRIBE ERROR:",
+                            error
+                        );
+
+                        return;
+                    }
+
+                    console.log(
+                        "SUBSCRIBED:",
+                        TOPIC_DATA
+                    );
+
+                }
+            );
+
+        }
+    );
+
+    mqttClient.on(
+        "message",
+        function (
+            topic,
+            message
+        ) {
+
+            if (
+                topic !== TOPIC_DATA
+            ) {
+                return;
+            }
+
+            try {
+
+                const data =
+                    JSON.parse(
+                        message.toString()
+                    );
+
+                if (
+                    data.energy !== undefined
+                ) {
+
+                    saveWeeklyEnergy(
+                        Number(
+                            data.energy
+                        )
+                    );
+
+                }
+
+            } catch (error) {
+
+                console.error(
+                    "MQTT JSON ERROR:",
+                    error
+                );
+
+            }
+
+        }
+    );
+
+    mqttClient.on(
+        "error",
+        function (error) {
+
+            console.error(
+                "MQTT ERROR:",
+                error
+            );
+
+        }
+    );
+}
+
+
+/* =========================================================
+   JAM
+========================================================= */
+
+function updateClock() {
+
+    clockEl.textContent =
+        new Date().toLocaleTimeString(
+            "id-ID"
+        );
+}
+
+setInterval(
+    updateClock,
+    1000
+);
+
+
+/* =========================================================
+   KEMBALI
+========================================================= */
+
+backButton.addEventListener(
+    "click",
+    function () {
+
+        window.location.href =
+            "index.html";
+
+    }
+);
+
+
+/* =========================================================
+   START
+========================================================= */
+
+window.addEventListener(
+    "load",
+    function () {
+
+        renderMonthCards();
+        updateClock();
+        connectMQTT();
+
+    }
+);
+
+</script>
+<!-- =====================================================
+     POPUP DETAIL TAGIHAN
+===================================================== -->
+
+<div id="monthPopup" class="month-popup">
+
+    <div class="month-popup-box">
+
+        <button
+            type="button"
+            id="monthPopupClose"
+            class="month-popup-close">
+            ×
+        </button>
+
+        <h2 id="monthPopupTitle">
+            Tagihan Januari
+        </h2>
+
+        <p class="month-popup-subtitle">
+            Rincian tagihan listrik setiap minggu
+        </p>
+
+        <div
+            id="monthPopupContent"
+            class="month-popup-content">
+        </div>
+
+    </div>
+
+</div>
+
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+
+    const popup =
+        document.getElementById("monthPopup");
+
+    const popupBox =
+        document.querySelector(".month-popup-box");
+
+    const closeButton =
+        document.getElementById("monthPopupClose");
+
+    const title =
+        document.getElementById("monthPopupTitle");
+
+    const content =
+        document.getElementById("monthPopupContent");
+
+
+    /*
+     * MEMBUKA POPUP
+     */
+
+    function openMonthPopup(month) {
+
+        title.textContent =
+            "Tagihan " + month;
+
+        content.innerHTML = `
+
+            <div class="week-bill">
+                <div>
+                    <h3>Minggu 1</h3>
+                    <p>Pemakaian listrik</p>
+                </div>
+
+                <strong>0.000 kWh</strong>
+            </div>
+
+
+            <div class="week-bill">
+                <div>
+                    <h3>Minggu 2</h3>
+                    <p>Pemakaian listrik</p>
+                </div>
+
+                <strong>0.000 kWh</strong>
+            </div>
+
+
+            <div class="week-bill">
+                <div>
+                    <h3>Minggu 3</h3>
+                    <p>Pemakaian listrik</p>
+                </div>
+
+                <strong>0.000 kWh</strong>
+            </div>
+
+
+            <div class="week-bill">
+                <div>
+                    <h3>Minggu 4</h3>
+                    <p>Pemakaian listrik</p>
+                </div>
+
+                <strong>0.000 kWh</strong>
+            </div>
+
+
+            <div class="week-bill">
+                <div>
+                    <h3>Minggu 5</h3>
+                    <p>Pemakaian listrik</p>
+                </div>
+
+                <strong>0.000 kWh</strong>
+            </div>
+
+        `;
+
+        popup.classList.add("active");
+
+        document.body.classList.add(
+            "popup-open"
+        );
+
+    }
+
+
+    /*
+     * SEMUA CARD BULAN
+     */
+
+    const monthCards =
+        document.querySelectorAll(
+            ".month-card"
+        );
+
+
+    monthCards.forEach(function (card) {
+
+        card.addEventListener(
+            "click",
+            function () {
+
+                const month =
+                    card.getAttribute(
+                        "data-month"
+                    );
+
+                if (!month) {
+                    return;
+                }
+
+                openMonthPopup(month);
+
+            }
+        );
+
+    });
+
+
+    /*
+     * TUTUP POPUP
+     */
+
+    function closeMonthPopup() {
+
+        popup.classList.remove("active");
+
+        document.body.classList.remove(
+            "popup-open"
+        );
+
+    }
+
+
+    closeButton.addEventListener(
+        "click",
+        closeMonthPopup
+    );
+
+
+    /*
+     * KLIK AREA GELAP
+     */
+
+    popup.addEventListener(
+        "click",
+        function (event) {
+
+            if (event.target === popup) {
+
+                closeMonthPopup();
+
+            }
+
+        }
+    );
+
+
+    /*
+     * TOMBOL ESC
+     */
+
+    document.addEventListener(
+        "keydown",
+        function (event) {
+
+            if (event.key === "Escape") {
+
+                closeMonthPopup();
+
+            }
+
+        }
+    );
+
+});
+</script>
+</body>
+</html>
