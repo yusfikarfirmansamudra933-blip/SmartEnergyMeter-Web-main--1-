@@ -1,449 +1,102 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="id">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta name="viewport"
-          content="width=device-width, initial-scale=1">
-
-    <title>Smart Energy Meter</title>
-
-   <link rel="manifest" href="/SmartEnergyMeter-Web/manifest.json">
-
-    <link rel="stylesheet" href="style.css">
-
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#148a43">
+  <title>Smart Energy Meter</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
-
-<div class="container">
-
-    <!-- HEADER -->
-    <header>
-
-        <div>
-
-            <h1>SMART ENERGY METER</h1>
-
-            <p>Industrial IoT Monitoring</p>
-            <button id="installBtn" style="display:none;">
-            📲 INSTALL APP
-        </button>
-
+  <main class="container">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">SMART ENERGY METER</p>
+        <h1>Monitoring energi yang jelas.</h1>
+        <p class="subtitle">Pantau pemakaian listrik dan atur batas daya dari satu dashboard.</p>
+      </div>
+      <div class="header-actions">
+        <button id="installBtn" class="button button-secondary" hidden>Install aplikasi</button>
+        <div class="connection-status" aria-live="polite">
+          <span id="wifiLed" class="status-dot"></span>
+          <span id="wifiText">Menghubungkan…</span>
         </div>
-
-        <div class="status">
-
-            <span id="wifiLed"></span>
-
-            <span id="wifiText">
-                Connecting...
-            </span>
-
-        </div>
-
-        <div class="clockArea">
-
-            <span id="clock">
-                00:00:00
-            </span>
-
-        </div>
-
+        <time id="clock">00:00:00</time>
+      </div>
     </header>
 
-
-    <!-- DATA CARDS -->
-    <section class="cards">
-
-        <div class="card">
-
-            <h3>Voltage</h3>
-
-            <h2 id="voltage">0</h2>
-
-            <p>Volt</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Current</h3>
-
-            <h2 id="current">0</h2>
-
-            <p>Ampere</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Power</h3>
-
-            <h2 id="power">0</h2>
-
-            <p>Watt</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Energy</h3>
-
-            <h2 id="energy">0</h2>
-
-            <p>kWh</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Frequency</h3>
-
-            <h2 id="frequency">0</h2>
-
-            <p>Hz</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Power Factor</h3>
-
-            <h2 id="pf">0</h2>
-
-            <p>PF</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Apparent Power</h3>
-
-            <h2 id="va">0</h2>
-
-            <p>VA</p>
-
-        </div>
-
-
-        <div class="card">
-
-            <h3>Reactive Power</h3>
-
-            <h2 id="var">0</h2>
-
-            <p>VAR</p>
-
-        </div>
-
+    <section class="metrics" aria-label="Data meter saat ini">
+      <article class="metric-card"><p>Tegangan</p><strong id="voltage">0.0</strong><span>Volt</span></article>
+      <article class="metric-card"><p>Arus</p><strong id="current">0.00</strong><span>Ampere</span></article>
+      <article class="metric-card metric-card-highlight"><p>Daya</p><strong id="power">0</strong><span>Watt</span></article>
+      <article class="metric-card"><p>Energi</p><strong id="energy">0.000</strong><span>kWh</span></article>
+      <article class="metric-card"><p>Frekuensi</p><strong id="frequency">0.0</strong><span>Hz</span></article>
+      <article class="metric-card"><p>Power factor</p><strong id="pf">0.00</strong><span>PF</span></article>
+      <article class="metric-card"><p>Daya semu</p><strong id="va">0</strong><span>VA</span></article>
+      <article class="metric-card"><p>Daya reaktif</p><strong id="var">0</strong><span>VAR</span></article>
     </section>
 
-
-    <!-- POWER GAUGE -->
-    <section class="gaugeCard">
-
-        <h2>
-            Realtime Power
-        </h2>
-
-        <div class="gaugeContainer">
-
-            <svg
-                width="260"
-                height="260"
-                viewBox="0 0 260 260">
-
-                <circle
-                    cx="130"
-                    cy="130"
-                    r="100"
-                    stroke="#23304b"
-                    stroke-width="18"
-                    fill="none"/>
-
-                <circle
-                    id="powerGauge"
-                    cx="130"
-                    cy="130"
-                    r="100"
-                    stroke="#3b82f6"
-                    stroke-width="18"
-                    fill="none"
-                    stroke-linecap="round"
-                    stroke-dasharray="628"
-                    stroke-dashoffset="628"
-                    transform="rotate(-90 130 130)"/>
-
-            </svg>
-
-
-            <div class="gaugeText">
-
-                <h1 id="gaugeValue">
-                    0W
-                </h1>
-
-                <p>
-                    Realtime Power
-                </p>
-
-            </div>
-
+    <section class="dashboard-grid">
+      <article class="panel gauge-panel">
+        <div class="panel-heading">
+          <div><p class="eyebrow">PEMAKAIAN SAAT INI</p><h2>Power limiter</h2></div>
+          <span id="percent" class="percentage">0%</span>
         </div>
-
-    </section>
-
-
-    <!-- POWER STATUS -->
-    <section class="statusCard">
-
-        <h3>Power</h3>
-
-        <h1 id="percent">
-            0%
-        </h1>
-
-    </section>
-
-
-    <!-- PZEM STATUS -->
-    <section class="statusCard">
-
-        <h3>PZEM</h3>
-
-        <h1 id="pzemStatus">
-            ONLINE
-        </h1>
-
-    </section>
-
-
-   <!-- SETTINGS -->
-<section class="setting">
-
-    <h2>
-        Power Limiter
-    </h2>
-
-    <h3 id="test">
-        700 W
-    </h3>
-
-    <input
-        id="limitInput"
-        type="number"
-        min="100"
-        max="10000"
-        placeholder="Limit Watt">
-
-
-    <button
-        id="saveLimitBtn"
-        onclick="saveLimit()">
-
-        Save Limit
-
-    </button>
-
-    <button
-        id="reconnect"
-        onclick="connectWebSocket()">
-
-        RECONNECT
-
-    </button>
-
-
-    <button
-        id="restartBtn"
-        onclick="restartESP()">
-
-        Restart ESP
-
-    </button>
-
-
-    <button
-        id="factoryBtn"
-        onclick="factoryReset()">
-
-        Factory Reset
-
-    </button>
-
-</section>
-
-
-    <!-- GRAPH -->
-    <section class="chartCard">
-
-        <h2>
-            Realtime Graph
-        </h2>
-
-        <canvas id="powerChart"></canvas>
-
-    </section>
-
-
-    <!-- SYSTEM STATUS -->
-    <section class="statusCard">
-
-        <div class="statusItem">
-
-            Dashboard
-
-            <span id="fps">
-                0 Hz
-            </span>
-
+        <div class="gauge-container">
+          <svg viewBox="0 0 260 260" role="img" aria-label="Persentase daya terhadap limit">
+            <circle cx="130" cy="130" r="100" class="gauge-track"></circle>
+            <circle id="powerGauge" cx="130" cy="130" r="100" class="gauge-progress" transform="rotate(-90 130 130)"></circle>
+          </svg>
+          <div class="gauge-text"><strong id="gaugeValue">0 W</strong><span id="test">Limit 700 W</span></div>
         </div>
+      </article>
 
-
-        <div class="statusItem">
-
-            Connection
-
-            <span id="connectionText">
-                Excellent
-            </span>
-
-        </div>
-
+      <article class="panel status-panel">
+        <p class="eyebrow">STATUS PERANGKAT</p>
+        <div class="status-row"><span>Sensor PZEM</span><strong id="pzemStatus">Memeriksa</strong></div>
+        <div class="status-row"><span>Koneksi dashboard</span><strong id="connectionText">Menghubungkan</strong></div>
+        <div class="status-row"><span>Pembaruan data</span><strong id="fps">0 Hz</strong></div>
+      </article>
     </section>
 
-</div>
+    <section class="panel chart-panel">
+      <div class="panel-heading"><div><p class="eyebrow">RIWAYAT SINGKAT</p><h2>Grafik realtime</h2></div></div>
+      <canvas id="powerChart" aria-label="Grafik daya, tegangan, dan arus"></canvas>
+    </section>
 
+    <section class="panel settings-panel">
+      <div><p class="eyebrow">PENGATURAN</p><h2>Batas daya</h2><p class="muted">Masukkan nilai antara 100 dan 10.000 watt.</p></div>
+      <div class="limit-control">
+        <label for="limitInput">Batas daya (Watt)</label>
+        <input id="limitInput" type="number" min="100" max="10000" inputmode="decimal" placeholder="Contoh: 700">
+        <button id="saveLimitBtn" class="button button-primary" onclick="saveLimit()">Simpan batas</button>
+      </div>
+      <div class="device-actions">
+        <button id="reconnect" class="button button-secondary" onclick="connectWebSocket()">Hubungkan ulang</button>
+        <button id="restartBtn" class="button button-secondary" onclick="restartESP()">Restart perangkat</button>
+        <button id="factoryBtn" class="button button-danger" onclick="factoryReset()">Factory reset</button>
+      </div>
+    </section>
 
-<!-- CHART.JS -->
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <a class="bill-link" href="bill.html"><span>Tagihan listrik</span><strong>Lihat estimasi bulanan →</strong></a>
+  </main>
 
-
-<!-- MQTT.JS -->
-
-
-<!-- SCRIPT UTAMA -->
-<script src="script.js"></script>
-
-
-<!-- SERVICE WORKER -->
-<script>
-
-if ('serviceWorker' in navigator) {
-
-    window.addEventListener('load', function () {
-
-        navigator.serviceWorker.register(
-            'service-worker.js'
-        )
-        .then(function () {
-
-            console.log(
-                'Service Worker berhasil terdaftar'
-            );
-
-        })
-        .catch(function (error) {
-
-            console.error(
-                'Service Worker gagal:',
-                error
-            );
-
-        });
-
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="script.js"></script>
+  <script>
+    if ("serviceWorker" in navigator) navigator.serviceWorker.register("service-worker.js").catch(console.error);
+    let deferredPrompt;
+    const installBtn = document.getElementById("installBtn");
+    window.addEventListener("beforeinstallprompt", event => {
+      event.preventDefault(); deferredPrompt = event; installBtn.hidden = false;
     });
-
-}
-
-</script>
-<!-- PWA INSTALL -->
-<script>
-
-let deferredPrompt;
-
-const installBtn = document.getElementById("installBtn");
-
-window.addEventListener("beforeinstallprompt", (event) => {
-
-    // Mencegah browser menampilkan prompt otomatis
-    event.preventDefault();
-
-    // Simpan event untuk digunakan saat tombol ditekan
-    deferredPrompt = event;
-
-    // Tampilkan tombol install
-    installBtn.style.display = "inline-block";
-
-});
-
-
-installBtn.addEventListener("click", async () => {
-
-    if (!deferredPrompt) {
-        return;
-    }
-
-    // Tampilkan dialog instalasi
-    deferredPrompt.prompt();
-
-    // Tunggu pilihan pengguna
-    const { outcome } = await deferredPrompt.userChoice;
-
-    console.log(
-        "Hasil instalasi:",
-        outcome
-    );
-
-    // Event hanya bisa digunakan sekali
-    deferredPrompt = null;
-
-    // Sembunyikan tombol
-    installBtn.style.display = "none";
-
-});
-
-
-window.addEventListener("appinstalled", () => {
-
-    console.log(
-        "Smart Energy Meter berhasil di-install"
-    );
-
-    installBtn.style.display = "none";
-
-});
-
-</script>
-<!-- TAGIHAN LISTRIK -->
-
-<a href="bill.html"
-   class="project-card">
-
-    <h3>
-        💰 Tagihan Listrik Bulanan
-    </h3>
-
-    <p>
-        Lihat tagihan listrik
-        setiap bulan
-    </p>
-
-    <strong>
-        Buka Tagihan →
-    </strong>
-
-</a>
-
+    installBtn.addEventListener("click", async () => {
+      if (!deferredPrompt) return;
+      deferredPrompt.prompt(); await deferredPrompt.userChoice;
+      deferredPrompt = null; installBtn.hidden = true;
+    });
+    window.addEventListener("appinstalled", () => { installBtn.hidden = true; });
+  </script>
 </body>
-
 </html>
