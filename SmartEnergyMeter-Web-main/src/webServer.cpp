@@ -1,295 +1,148 @@
 #include "webServer.h"
 
 #include <Arduino.h>
-#include <cstring>
-#include <LittleFS.h>
-#include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
-#include <WiFi.h>
+#include <ESPAsyncWebServer.h>
+#include <LittleFS.h>
+
 #include "globals.h"
 #include "storage.h"
 #include "wifiManager.h"
 
-AsyncWebServer server(80);
-AsyncWebSocket ws("/ws");
+namespace {
+constexpr uint16_t HTTP_PORT = 80;
+constexpr unsigned long STATUS_BROADCAST_INTERVAL_MS = 1000;
 
-//====================================================
-// Broadcast JSON
-//====================================================
+AsyncWebServer server(HTTP_PORT);
+AsyncWebSocket webSocket("/ws");
+
+String createStatusJson()
+{
+    StaticJsonDocument<512> document;
+    document["voltage"] = voltage;
+    document["current"] = current;
+    document["power"] = power;
+    document["energy"] = energy;
+    document["frequency"] = frequency;
+    document["pf"] = pf;
+    document["va"] = apparentPower;
+    document["var"] = reactivePower;
+    document["trip"] = overload;
+    document["limit"] = powerLimit;
+    document["wifi"] = wifiConnected();
+    document["sensor"] = sensorOnline;
+    document["ip"] = getIPAddress();
+
+    String json;
+    serializeJson(document, json);
+    return json;
+}
+
+void sendStatus(AsyncWebServerRequest *request)
+{
+    request->send(200, "application/json", createStatusJson());
+}
 
 void notifyClients()
 {
-    StaticJsonDocument<512> doc;
-
-    doc["voltage"] = voltage;
-    doc["current"] = current;
-    doc["power"] = power;
-    doc["energy"] = energy;
-    doc["frequency"] = frequency;
-    doc["pf"] = pf;
-
-    doc["va"] = apparentPower;
-    doc["var"] = reactivePower;
-
-    doc["trip"] = overload;
-    doc["limit"] = powerLimit;
-
-    doc["wifi"] = wifiConnected();
-    doc["sensor"] = sensorOnline;
-    doc["ip"] = getIPAddress();
-
-    String json;
-serializeJson(doc, json);
-
-Serial.print("Notify Limit = ");
-Serial.println(powerLimit);
-
-ws.textAll(json);
+    webSocket.textAll(createStatusJson());
 }
 
-//====================================================
-// WebSocket Event
-//====================================================
-
-void onWsEvent(
-    AsyncWebSocket *server,
+void handleWebSocket(
+    AsyncWebSocket *,
     AsyncWebSocketClient *client,
-    AwsEventType type,
-    void *arg,
-    uint8_t *data,
-    size_t len)
+    AwsEventType event,
+    void *,
+    uint8_t *,
+    size_t)
 {
-    switch(type)
+    if (event == WS_EVT_CONNECT)
     {
-        case WS_EVT_CONNECT:
-            Serial.printf("Client %u Connected\n", client->id());
-            notifyClients();
-            break;
-
-        case WS_EVT_DISCONNECT:
-            Serial.printf("Client %u Disconnect\n", client->id());
-            break;
-
-        case WS_EVT_DATA:
-        {
-            AwsFrameInfo *info = (AwsFrameInfo*)arg;
-
-            if(info->opcode == WS_TEXT)
-            {
-                String msg;
-
-                for(size_t i=0;i<len;i++)
-                    msg += (char)data[i];
-
-                Serial.println(msg);
-            }
-        }
-        break;
-
-        default:
-        break;
+        Serial.printf("Dashboard client %u connected\n", client->id());
+        client->text(createStatusJson());
+    }
+    else if (event == WS_EVT_DISCONNECT)
+    {
+        Serial.printf("Dashboard client %u disconnected\n", client->id());
     }
 }
 
-//====================================================
-// API STATUS
-//====================================================
-
-void registerApiStatus()
+void registerApiRoutes()
 {
-    server.on("/api/status", HTTP_GET,
-    [](AsyncWebServerRequest *request)
-    {
-        StaticJsonDocument<512> doc;
+    server.on("/api/status", HTTP_GET, sendStatus);
 
-        doc["voltage"] = voltage;
-        doc["current"] = current;
-        doc["power"] = power;
-        doc["energy"] = energy;
-        doc["frequency"] = frequency;
-        doc["pf"] = pf;
-        doc["va"] = apparentPower;
-        doc["var"] = reactivePower;
-
-        doc["limit"] = powerLimit;
-
-        doc["wifi"] = wifiConnected();
-        doc["sensor"] = sensorOnline;
-        doc["ip"] = getIPAddress();
-
-        String json;
-        serializeJson(doc, json);
-
-        request->send(200, "application/json", json);
-    });
-}
-
-//====================================================
-// SET LIMIT
-//====================================================
-
-void registerSetLimit()
-{
-    server.on("/setLimit", HTTP_GET,
-    [](AsyncWebServerRequest *request)
-    {
-        if(!request->hasParam("value"))
+    server.on("/setLimit", HTTP_GET, [](AsyncWebServerRequest *request) {
+        if (!request->hasParam("value"))
         {
-            request->send(400, "text/plain", "No Value");
+            request->send(400, "text/plain", "Missing power limit");
             return;
         }
 
-        float value = request->getParam("value")->value().toFloat();
-
-        Serial.print("Request Limit = ");
-        Serial.println(value);
-
-        if(value < 100 || value > 10000)
+        const float value = request->getParam("value")->value().toFloat();
+        if (value < 100.0f || value > 10000.0f)
         {
-            request->send(400, "text/plain", "Invalid");
+            request->send(400, "text/plain", "Power limit must be 100 to 10000");
             return;
         }
 
         saveLimit(value);
-
         notifyClients();
-
         request->send(200, "text/plain", "OK");
     });
-}
 
-//====================================================
-// RESTART
-//====================================================
-
-void registerRestart()
-{
-    server.on("/restart", HTTP_GET,
-    [](AsyncWebServerRequest *request)
-    {
-        request->send(200,"text/plain","Restart");
-
-        delay(300);
-
+    server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
+        request->send(200, "text/plain", "Restarting");
+        delay(250);
         ESP.restart();
     });
-}
 
-//====================================================
-// FACTORY RESET
-//====================================================
-
-void registerFactoryReset()
-{
-    server.on("/factoryReset", HTTP_GET,
-    [](AsyncWebServerRequest *request)
-    {
+    server.on("/factoryReset", HTTP_GET, [](AsyncWebServerRequest *request) {
         resetConfig();
-
         notifyClients();
-
-        request->send(200,"text/plain","Factory Reset");
+        request->send(200, "text/plain", "Factory reset complete");
     });
 }
-
-//====================================================
-// LOGIN
-//====================================================
-
-void registerLogin()
-{
-    server.on("/login",
-    HTTP_POST,
-
-    [](AsyncWebServerRequest *request){},
-
-    NULL,
-
-    [](AsyncWebServerRequest *request,
-       uint8_t *data,
-       size_t len,
-       size_t index,
-       size_t total)
-    {
-
-        StaticJsonDocument<128> doc;
-
-        deserializeJson(doc,data);
-
-        String username = doc["username"];
-        String password = doc["password"];
-
-        if (strlen(WEB_USERNAME) > 0 && strlen(WEB_PASSWORD) > 0 &&
-            username == WEB_USERNAME && password == WEB_PASSWORD)
-        {
-            request->send(200,"text/plain","OK");
-        }
-        else
-        {
-            request->send(401,"text/plain","FAIL");
-        }
-
-    });
-}
-
-//====================================================
-// WEBSITE
-//====================================================
 
 void registerStaticFiles()
 {
-    server.serveStatic("/", LittleFS, "/")
-          .setDefaultFile("index.html");
+    server.serveStatic("/", LittleFS, "/").setDefaultFile("index.html");
 }
-
-//====================================================
-// START SERVER
-//====================================================
+}  // namespace
 
 void webServerBegin()
 {
-    if(!LittleFS.begin(true))
+    if (!LittleFS.begin(true))
     {
-        Serial.println("LittleFS Mount Failed");
+        Serial.println("LittleFS mount failed");
         return;
     }
 
-    ws.onEvent(onWsEvent);
-
-    server.addHandler(&ws);
-
+    webSocket.onEvent(handleWebSocket);
+    server.addHandler(&webSocket);
     registerStaticFiles();
-    registerApiStatus();
-    registerSetLimit();
-    registerRestart();
-    registerFactoryReset();
-    registerLogin();
-   
+    registerApiRoutes();
 
-    server.onNotFound([](AsyncWebServerRequest *request)
-    {
-        request->send(404,"text/plain","404 Not Found");
+    server.onNotFound([](AsyncWebServerRequest *request) {
+        request->send(404, "text/plain", "Not found");
     });
 
     server.begin();
-
-    Serial.println("HTTP Server Started");
+    Serial.println("HTTP server started");
 }
-
-//====================================================
-// LOOP
-//====================================================
 
 void webServerLoop()
 {
-    ws.cleanupClients();
+    webSocket.cleanupClients();
 
-    static unsigned long lastUpdate = 0;
-
-    if(millis() - lastUpdate >= 1000)
+    static unsigned long lastBroadcast = 0;
+    if (millis() - lastBroadcast >= STATUS_BROADCAST_INTERVAL_MS)
     {
-        lastUpdate = millis();
-
+        lastBroadcast = millis();
         notifyClients();
     }
+}
+
+void notifyClients()
+{
+    webSocket.textAll(createStatusJson());
 }
