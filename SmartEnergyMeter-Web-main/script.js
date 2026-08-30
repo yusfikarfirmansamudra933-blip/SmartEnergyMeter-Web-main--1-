@@ -1,8 +1,7 @@
 "use strict";
 
 const $ = id => document.getElementById(id);
-const fields = ["voltage","current","power","energy","frequency","pf","va","var"];
-const meter = { voltage:0,current:0,power:0,energy:0,frequency:0,pf:0,va:0,var:0,limit:700,wifi:false,sensor:false };
+const meter = { voltage:0,current:0,power:0,energy:0,frequency:0,pf:0,va:0,var:0,wifi:false,sensor:false };
 const chartLabels = [], powerValues = [], voltageValues = [], currentValues = [];
 const maxPoints = 40;
 let chart;
@@ -28,21 +27,6 @@ function createChart() {
   });
 }
 
-function updateGauge() {
-  const limit = Math.max(number(meter.limit), 1);
-  const percent = Math.min(Math.max((number(meter.power) / limit) * 100, 0), 100);
-  const circle = $("powerGauge");
-  const circumference = 2 * Math.PI * 100;
-  if (circle) {
-    circle.style.strokeDasharray = String(circumference);
-    circle.style.strokeDashoffset = String(circumference - (percent / 100) * circumference);
-    circle.style.stroke = percent >= 85 ? "#bf3d32" : percent >= 60 ? "#b77916" : "#20a657";
-  }
-  setText("gaugeValue", `${Math.round(number(meter.power))} W`);
-  setText("percent", `${Math.round(percent)}%`);
-  setText("test", `Limit ${Math.round(limit)} W`);
-}
-
 function updateChart() {
   if (!chart) return;
   chartLabels.push(new Date().toLocaleTimeString());
@@ -62,7 +46,6 @@ function updateDashboard() {
   setText("va", format(meter.va, 0)); setText("var", format(meter.var, 0));
   setText("pzemStatus", meter.sensor ? "Online" : "Tidak terdeteksi");
   setText("connectionText", meter.wifi ? "Terhubung" : "Wi-Fi terputus");
-  updateGauge();
 }
 
 function applyStatus(data, appendChart = true) {
@@ -114,22 +97,13 @@ async function sendRequest(path, successMessage) {
   showToast(successMessage);
 }
 
-async function saveLimit() {
-  const value = number($("limitInput").value);
-  if (value < 100 || value > 10000) return showToast("Masukkan batas 100–10.000 watt.", true);
-  const button = $("saveLimitBtn"); button.disabled = true;
-  try { await sendRequest(`/setLimit?value=${encodeURIComponent(value)}`, "Batas daya disimpan."); await refreshStatus(false); }
-  catch { showToast("Batas daya gagal disimpan.", true); }
-  finally { button.disabled = false; }
-}
-
 async function restartESP() {
   if (!confirm("Restart perangkat sekarang?")) return;
   try { await sendRequest("/restart", "Perintah restart dikirim."); } catch { showToast("Restart gagal dikirim.", true); }
 }
 
 async function factoryReset() {
-  if (!confirm("Factory reset mengembalikan batas daya ke nilai awal. Lanjutkan?")) return;
+  if (!confirm("Factory reset mengembalikan pengaturan perangkat ke nilai awal. Lanjutkan?")) return;
   try { await sendRequest("/factoryReset", "Factory reset selesai."); await refreshStatus(false); } catch { showToast("Factory reset gagal.", true); }
 }
 

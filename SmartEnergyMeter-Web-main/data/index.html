@@ -14,7 +14,7 @@
       <div>
         <p class="eyebrow">SMART ENERGY METER</p>
         <h1>Monitoring energi yang jelas.</h1>
-        <p class="subtitle">Pantau pemakaian listrik dan atur batas daya dari satu dashboard.</p>
+        <p class="subtitle">Pantau pemakaian listrik dari satu dashboard.</p>
       </div>
       <div class="header-actions">
         <button id="installBtn" class="button button-secondary" hidden>Install aplikasi</button>
@@ -37,27 +37,11 @@
       <article class="metric-card"><p>Daya reaktif</p><strong id="var">0</strong><span>VAR</span></article>
     </section>
 
-    <section class="dashboard-grid">
-      <article class="panel gauge-panel">
-        <div class="panel-heading">
-          <div><p class="eyebrow">PEMAKAIAN SAAT INI</p><h2>Power limiter</h2></div>
-          <span id="percent" class="percentage">0%</span>
-        </div>
-        <div class="gauge-container">
-          <svg viewBox="0 0 260 260" role="img" aria-label="Persentase daya terhadap limit">
-            <circle cx="130" cy="130" r="100" class="gauge-track"></circle>
-            <circle id="powerGauge" cx="130" cy="130" r="100" class="gauge-progress" transform="rotate(-90 130 130)"></circle>
-          </svg>
-          <div class="gauge-text"><strong id="gaugeValue">0 W</strong><span id="test">Limit 700 W</span></div>
-        </div>
-      </article>
-
-      <article class="panel status-panel">
-        <p class="eyebrow">STATUS PERANGKAT</p>
-        <div class="status-row"><span>Sensor PZEM</span><strong id="pzemStatus">Memeriksa</strong></div>
-        <div class="status-row"><span>Koneksi dashboard</span><strong id="connectionText">Menghubungkan</strong></div>
-        <div class="status-row"><span>Pembaruan data</span><strong id="fps">0 Hz</strong></div>
-      </article>
+    <section class="panel status-panel">
+      <p class="eyebrow">STATUS PERANGKAT</p>
+      <div class="status-row"><span>Sensor PZEM</span><strong id="pzemStatus">Memeriksa</strong></div>
+      <div class="status-row"><span>Koneksi dashboard</span><strong id="connectionText">Menghubungkan</strong></div>
+      <div class="status-row"><span>Pembaruan data</span><strong id="fps">0 Hz</strong></div>
     </section>
 
     <section class="panel chart-panel">
@@ -66,12 +50,7 @@
     </section>
 
     <section class="panel settings-panel">
-      <div><p class="eyebrow">PENGATURAN</p><h2>Batas daya</h2><p class="muted">Masukkan nilai antara 100 dan 10.000 watt.</p></div>
-      <div class="limit-control">
-        <label for="limitInput">Batas daya (Watt)</label>
-        <input id="limitInput" type="number" min="100" max="10000" inputmode="decimal" placeholder="Contoh: 700">
-        <button id="saveLimitBtn" class="button button-primary" onclick="saveLimit()">Simpan batas</button>
-      </div>
+      <div><p class="eyebrow">PENGATURAN</p><h2>Kontrol perangkat</h2></div>
       <div class="device-actions">
         <button id="reconnect" class="button button-secondary" onclick="connectWebSocket()">Hubungkan ulang</button>
         <button id="restartBtn" class="button button-secondary" onclick="restartESP()">Restart perangkat</button>
