@@ -43,11 +43,6 @@ void sendStatus(AsyncWebServerRequest *request)
     request->send(200, "application/json", createStatusJson());
 }
 
-void notifyClients()
-{
-    webSocket.textAll(createStatusJson());
-}
-
 void handleWebSocket(
     AsyncWebSocket *,
     AsyncWebSocketClient *client,
