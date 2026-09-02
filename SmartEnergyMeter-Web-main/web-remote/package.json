@@ -1,0 +1,8 @@
+{
+  "name": "web-remote",
+  "private": true,
+  "engines": { "node": ">=18" },
+  "dependencies": {
+    "mqtt": "^5.10.1"
+  }
+}

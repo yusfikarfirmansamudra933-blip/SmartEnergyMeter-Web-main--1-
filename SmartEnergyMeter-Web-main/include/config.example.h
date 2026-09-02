@@ -13,11 +13,13 @@
 
 // Prefer a CA certificate. Set MQTT_TLS_INSECURE to true only for temporary
 // local development when certificate validation is not available.
-#define MQTT_CA_CERT R"EOF(
------BEGIN CERTIFICATE-----
-replace-with-your-ca-certificate
------END CERTIFICATE-----
-)EOF"
+//
+// NOTE: each line must end with \n" \ like below (this compiler does not
+// support a plain multi-line raw string R"EOF(...)EOF" inside a #define).
+#define MQTT_CA_CERT \
+"-----BEGIN CERTIFICATE-----\n" \
+"replace-with-your-ca-certificate\n" \
+"-----END CERTIFICATE-----\n"
 #define MQTT_TLS_INSECURE false
 
 #define WEB_USERNAME "admin"

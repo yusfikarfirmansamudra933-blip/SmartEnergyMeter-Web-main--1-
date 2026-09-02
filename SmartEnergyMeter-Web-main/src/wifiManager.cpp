@@ -29,16 +29,27 @@ void wifiBegin()
 
 void wifiLoop()
 {
+    static bool ipPrinted = false;
 
     if(WiFi.status()==WL_CONNECTED)
+    {
+        if (!ipPrinted)
+        {
+            Serial.print("WiFi connected, dashboard IP: ");
+            Serial.println(WiFi.localIP());
+            ipPrinted = true;
+        }
         return;
+    }
+
+    ipPrinted = false;
 
     if (strlen(WIFI_SSID) == 0 || millis() - reconnectMillis < RECONNECT_INTERVAL_MS)
         return;
 
     reconnectMillis=millis();
 
-    Serial.println("Reconnect WiFi");
+    Serial.printf("Reconnect WiFi (status=%d, ssid=\"%s\")\n", WiFi.status(), WIFI_SSID);
 
     WiFi.disconnect();
 

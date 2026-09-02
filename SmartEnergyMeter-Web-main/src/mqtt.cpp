@@ -29,6 +29,7 @@ const unsigned long RECONNECT_INTERVAL_MS = 5000;
 //==========================================================
 
 const char* TOPIC_DATA    = "smartmeter/data";
+const char* TOPIC_STATUS  = "smartmeter/status";
 const char* TOPIC_LIMIT   = "smartmeter/cmd/limit";
 const char* TOPIC_RESTART = "smartmeter/cmd/restart";
 const char* TOPIC_RESET   = "smartmeter/cmd/reset";
@@ -142,8 +143,14 @@ void mqttReconnect()
     }
 
     lastReconnectAttempt = millis();
-    if (mqtt.connect("ESP32SmartMeter", MQTT_USERNAME, MQTT_PASSWORD))
+
+    // Last Will: if the device drops off ungracefully (power loss, WiFi
+    // loss), the broker publishes "offline" on our behalf so consumers can
+    // tell stale retained data from a genuinely live device.
+    if (mqtt.connect("ESP32SmartMeter", MQTT_USERNAME, MQTT_PASSWORD,
+                      TOPIC_STATUS, 1, true, "offline"))
     {
+        mqtt.publish(TOPIC_STATUS, "online", true);
         mqtt.subscribe(TOPIC_LIMIT);
         mqtt.subscribe(TOPIC_RESTART);
         mqtt.subscribe(TOPIC_RESET);
@@ -206,7 +213,7 @@ void mqttPublish()
     Serial.print("Publish : ");
     Serial.println(json);
 
-    if (mqtt.publish(TOPIC_DATA, json.c_str()))
+    if (mqtt.publish(TOPIC_DATA, json.c_str(), true))
     {
         Serial.println("PUBLISH SUCCESS");
     }

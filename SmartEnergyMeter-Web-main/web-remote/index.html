@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#148a43">
+  <title>Smart Energy Meter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="container">
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">SMART ENERGY METER</p>
+        <h1>Real time monitoring</h1>
+        <p class="subtitle">Pantau pemakaian listrik dari mana saja lewat cloud.</p>
+      </div>
+      <div class="header-actions">
+        <div class="connection-status" aria-live="polite">
+          <span id="wifiLed" class="status-dot"></span>
+          <span id="wifiText">Menghubungkan…</span>
+        </div>
+        <time id="clock">00:00:00</time>
+      </div>
+    </header>
+
+    <section class="metrics" aria-label="Data meter saat ini">
+      <article class="metric-card"><p>Tegangan</p><strong id="voltage">0.0</strong><span>Volt</span></article>
+      <article class="metric-card"><p>Arus</p><strong id="current">0.00</strong><span>Ampere</span></article>
+      <article class="metric-card metric-card-highlight"><p>Daya</p><strong id="power">0</strong><span>Watt</span></article>
+      <article class="metric-card"><p>Energi</p><strong id="energy">0.000</strong><span>kWh</span></article>
+      <article class="metric-card"><p>Frekuensi</p><strong id="frequency">0.0</strong><span>Hz</span></article>
+      <article class="metric-card"><p>Power factor</p><strong id="pf">0.00</strong><span>PF</span></article>
+      <article class="metric-card"><p>Daya semu</p><strong id="va">0</strong><span>VA</span></article>
+      <article class="metric-card"><p>Daya reaktif</p><strong id="var">0</strong><span>VAR</span></article>
+    </section>
+
+    <section class="panel status-panel">
+      <p class="eyebrow">STATUS PERANGKAT</p>
+      <div class="status-row"><span>Sensor PZEM</span><strong id="pzemStatus">Memeriksa</strong></div>
+      <div class="status-row"><span>Koneksi broker MQTT</span><strong id="connectionText">Menghubungkan</strong></div>
+      <div class="status-row"><span>Pembaruan data</span><strong id="fps">0 Hz</strong></div>
+    </section>
+
+    <section class="panel chart-panel">
+      <div class="panel-heading"><div><p class="eyebrow">RIWAYAT SINGKAT</p><h2>Grafik realtime</h2></div></div>
+      <canvas id="powerChart" aria-label="Grafik daya, tegangan, dan arus"></canvas>
+    </section>
+
+    <section class="panel settings-panel">
+      <div><p class="eyebrow">PENGATURAN</p><h2>Koneksi</h2><p class="muted">Kontrol perangkat (restart, factory reset) hanya tersedia di dashboard lokal, bukan di sini.</p></div>
+      <div class="device-actions">
+        <button id="reconnect" class="button button-secondary" onclick="connectMQTT()">Hubungkan ulang</button>
+      </div>
+    </section>
+
+    <a class="bill-link" href="bill.html"><span>Tagihan listrik</span><strong>Lihat estimasi bulanan →</strong></a>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+  <script src="script.js"></script>
+</body>
+</html>
