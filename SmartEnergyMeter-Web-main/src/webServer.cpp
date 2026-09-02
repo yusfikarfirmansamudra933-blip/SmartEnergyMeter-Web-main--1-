@@ -4,7 +4,9 @@
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <cstring>
 
+#include "config.h"
 #include "globals.h"
 #include "storage.h"
 #include "wifiManager.h"
@@ -62,9 +64,51 @@ void handleWebSocket(
     }
 }
 
+void handleLoginBody(
+    AsyncWebServerRequest *request,
+    uint8_t *data,
+    size_t len,
+    size_t index,
+    size_t total)
+{
+    static String body;
+    if (index == 0)
+    {
+        body = "";
+    }
+    for (size_t i = 0; i < len; i++)
+    {
+        body += (char)data[i];
+    }
+
+    if (index + len != total)
+    {
+        return;
+    }
+
+    StaticJsonDocument<256> document;
+    const bool parsed = deserializeJson(document, body) == DeserializationError::Ok;
+    const char *username = document["username"] | "";
+    const char *password = document["password"] | "";
+
+    const bool credentialsConfigured = strlen(WEB_USERNAME) > 0;
+    const bool authorized = credentialsConfigured && parsed &&
+                             strcmp(username, WEB_USERNAME) == 0 &&
+                             strcmp(password, WEB_PASSWORD) == 0;
+
+    request->send(authorized ? 200 : 401, "text/plain", authorized ? "OK" : "FAIL");
+}
+
 void registerApiRoutes()
 {
     server.on("/api/status", HTTP_GET, sendStatus);
+
+    server.on(
+        "/login",
+        HTTP_POST,
+        [](AsyncWebServerRequest *) {},
+        nullptr,
+        handleLoginBody);
 
     server.on("/setLimit", HTTP_GET, [](AsyncWebServerRequest *request) {
         if (!request->hasParam("value"))
