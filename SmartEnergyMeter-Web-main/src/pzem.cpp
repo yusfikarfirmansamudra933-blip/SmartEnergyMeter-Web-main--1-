@@ -10,6 +10,14 @@ HardwareSerial PZEMSerial(2);
 
 PZEM004Tv30 pzem(PZEMSerial, PZEM_RX, PZEM_TX);
 
+namespace {
+// A single bad UART read (checksum glitch, noise) shouldn't flip the
+// dashboard to "offline" — only report the sensor as gone after several
+// consecutive failures in a row.
+constexpr uint8_t OFFLINE_AFTER_CONSECUTIVE_FAILURES = 4;
+uint8_t consecutiveFailures = 0;
+}  // namespace
+
 //======================================================
 
 void pzemBegin()
@@ -39,11 +47,19 @@ void readPZEM()
 
     if (isnan(v) || isnan(i) || isnan(p) || isnan(e) || isnan(f) || isnan(pfValue))
     {
-        sensorOnline = false;
         pzemErrorCount++;
+        if (consecutiveFailures < 255)
+        {
+            consecutiveFailures++;
+        }
+        if (consecutiveFailures >= OFFLINE_AFTER_CONSECUTIVE_FAILURES)
+        {
+            sensorOnline = false;
+        }
         return;
     }
 
+    consecutiveFailures = 0;
     sensorOnline = true;
     pzemReadCount++;
 
