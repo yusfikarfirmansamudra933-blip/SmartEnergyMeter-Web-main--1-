@@ -1,443 +1,147 @@
 <!doctype html>
-<html lang="id">
+<html class="dark" lang="id">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#148a43">
-  <title>Tagihan Listrik Bulanan</title>
-  <link rel="stylesheet" href="style.css">
-  <style>
-    .months-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 18px; margin-top: 18px; }
-    .month-card { border: 1px solid var(--border); border-radius: 16px; padding: 22px 20px; min-height: 130px; cursor: pointer; text-align: left; background: var(--surface); color: var(--ink); box-shadow: var(--shadow); transition: transform .15s ease, border-color .15s ease; }
-    .month-card:hover { transform: translateY(-3px); border-color: var(--green-500); }
-    .month-card h3 { margin: 0 0 10px; font-size: 1.1rem; }
-    .month-card .month-total { font-size: 1.3rem; font-weight: 800; color: var(--green-700); margin-bottom: 6px; }
-    .month-card small { color: var(--muted); }
-    .month-overlay { position: fixed; inset: 0; z-index: 999; display: none; align-items: center; justify-content: center; padding: 20px; background: rgba(16,65,31,.35); backdrop-filter: blur(4px); }
-    .month-overlay.show { display: flex; }
-    .month-modal { width: min(700px, 100%); max-height: 85vh; overflow-y: auto; background: var(--surface); border: 1px solid var(--border); border-radius: 20px; padding: 26px; box-shadow: var(--shadow); }
-    .modal-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 15px; margin-bottom: 18px; }
-    .close-modal { width: 38px; height: 38px; border: 1px solid var(--border); border-radius: 50%; cursor: pointer; font-size: 22px; background: var(--surface); color: var(--ink); }
-    .close-modal:hover { background: var(--green-100); }
-    .week-list { display: grid; gap: 10px; }
-    .week-row { display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 12px; }
-    .week-row strong { display: block; margin-bottom: 4px; }
-    .week-row small { color: var(--muted); }
-    .week-bill { font-weight: 800; color: var(--green-700); }
-    .empty-week { text-align: center; padding: 20px; color: var(--muted); }
-    @media (max-width: 900px) { .months-grid { grid-template-columns: repeat(3, minmax(0,1fr)); } }
-    @media (max-width: 650px) { .months-grid { grid-template-columns: repeat(2, minmax(0,1fr)); } }
-    @media (max-width: 420px) { .months-grid { grid-template-columns: 1fr; } }
-  </style>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<title>Tagihan Listrik</title>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#0b1326;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style>
+<script src="https://cdn.tailwindcss.com"></script>
+<script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface": "#0b1326", "on-surface-variant": "#bbcabf", "surface-slate": "#1E293B", "on-primary-fixed": "#002113", "on-secondary-fixed-variant": "#004e5c", "tertiary": "#ffb95f", "outline": "#86948a", "primary": "#4edea3", "surface-container-high": "#222a3d", "on-tertiary-fixed": "#2a1700", "on-error-container": "#ffdad6", "background": "#0b1326", "tertiary-container": "#e29100", "secondary-fixed-dim": "#4cd7f6", "text-dim": "#94A3B8", "inverse-surface": "#dae2fd", "on-tertiary-container": "#523200", "surface-charcoal": "#0B1120", "on-secondary-container": "#00424e", "tertiary-fixed-dim": "#ffb95f", "danger-rose": "#F43F5E", "inverse-primary": "#006c49", "on-primary-container": "#00422b", "surface-bright": "#31394d", "inverse-on-surface": "#283044", "secondary-fixed": "#acedff", "primary-fixed-dim": "#4edea3", "on-surface": "#dae2fd", "surface-container-lowest": "#060e20", "on-primary": "#003824", "surface-container": "#171f33", "secondary": "#4cd7f6", "surface-dim": "#0b1326", "surface-container-low": "#131b2e", "surface-variant": "#2d3449", "error": "#ffb4ab", "secondary-container": "#03b5d3", "outline-variant": "#3c4a42", "on-secondary-fixed": "#001f26", "primary-container": "#10b981", "error-container": "#93000a", "on-secondary": "#003640", "tertiary-fixed": "#ffddb8", "surface-container-highest": "#2d3449", "on-error": "#690005", "on-primary-fixed-variant": "#005236", "surface-tint": "#4edea3", "primary-fixed": "#6ffbbe", "on-background": "#dae2fd", "on-tertiary-fixed-variant": "#653e00", "on-tertiary": "#472a00" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter-xs": "0.25rem", "gutter-sm": "0.5rem", "card-pad": "1.25rem", "gutter-lg": "1.5rem", "gutter-md": "1rem", "gutter-xl": "2rem", "panel-gap": "1rem" }, "fontFamily": { "headline-metric": ["Space Grotesk", "sans-serif"], "metric-unit": ["JetBrains Mono", "monospace"], "label-telemetry": ["JetBrains Mono", "monospace"], "body-md": ["Space Grotesk", "sans-serif"], "title-md": ["Space Grotesk", "sans-serif"], "display-lg": ["Space Grotesk", "sans-serif"], "body-sm": ["Space Grotesk", "sans-serif"], "headline-metric-mobile": ["Space Grotesk", "sans-serif"], "display-lg-mobile": ["Space Grotesk", "sans-serif"] }, "fontSize": { "headline-metric": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "metric-unit": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "label-telemetry": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "400" }], "title-md": ["18px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600" }], "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400" }], "headline-metric-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }] } } } };</script>
 </head>
-<body>
-  <main class="container">
-    <header class="app-header">
-      <div>
-        <p class="eyebrow">TAGIHAN LISTRIK</p>
-        <h1>Estimasi tagihan bulanan.</h1>
-        <p class="subtitle">Dihitung dari energi (kWh) yang dilaporkan perangkat lewat cloud.</p>
-      </div>
-      <div class="header-actions">
-        <a class="button button-secondary" href="index.html">← Kembali ke Dashboard</a>
-        <time id="clock">00:00:00</time>
-      </div>
-    </header>
+<body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary selection:text-on-primary">
+<main class="flex flex-col relative w-full pt-safe pb-24 bg-surface min-h-screen">
+<div class="flex flex-col w-full px-gutter-md space-y-panel-gap pt-gutter-md">
 
-    <section class="panel chart-panel">
-      <div class="panel-heading"><div><p class="eyebrow">TREN</p><h2>Tagihan per bulan (tahun ini)</h2></div></div>
-      <canvas id="billTrendChart" aria-label="Grafik tren tagihan bulanan" height="90"></canvas>
-    </section>
+<div class="flex flex-col space-y-gutter-xs">
+<div class="flex items-center justify-between">
+<a class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high transition-all text-secondary active:scale-95 group" href="index.html">
+<span class="material-symbols-outlined text-[18px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
+<span class="font-label-telemetry text-label-telemetry uppercase tracking-wider text-secondary">Kembali ke Monitoring</span>
+</a>
+<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-high">
+<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></span>
+<span class="font-label-telemetry text-label-telemetry text-primary uppercase" id="brokerBadge">Menghubungkan</span>
+</div>
+</div>
+<div class="flex flex-col pt-1">
+<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-widest">TELEMETRI BIAYA</span>
+<h1 class="font-display-lg-mobile text-display-lg-mobile text-on-surface font-bold tracking-tight">Estimasi Tagihan</h1>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Dihitung dari akumulasi energi (kWh) yang dilaporkan perangkat lewat cloud.</p>
+</div>
+</div>
 
-    <section class="panel chart-panel">
-      <div class="panel-heading"><div><p class="eyebrow">RINCIAN</p><h2>Tagihan per bulan</h2></div></div>
-      <p class="muted">Pilih bulan untuk melihat rincian tagihan tiap minggu.</p>
-      <div id="monthsGrid" class="months-grid"></div>
-    </section>
-  </main>
+<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-xl flex flex-col relative overflow-hidden">
+<div class="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
+<div class="flex items-center justify-between z-10">
+<div class="flex flex-col">
+<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">BULAN BERJALAN</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold" id="heroMonthLabel">-</span>
+</div>
+<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-container/15 text-primary" id="heroBadge">
+<span class="material-symbols-outlined text-[16px]">eco</span>
+<span class="font-label-telemetry text-label-telemetry uppercase font-semibold" id="heroBadgeText">-</span>
+</div>
+</div>
+<div class="flex flex-col sm:flex-row items-center gap-gutter-md my-gutter-md z-10">
+<div class="relative flex items-center justify-center shrink-0 w-36 h-36">
+<svg class="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
+<circle class="stroke-surface-container-highest" cx="60" cy="60" fill="none" r="50" stroke-width="10"></circle>
+<circle class="stroke-primary" cx="60" cy="60" fill="none" id="heroGauge" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16" stroke-linecap="round" stroke-width="10"></circle>
+</svg>
+<div class="absolute flex flex-col items-center justify-center text-center">
+<span class="font-display-lg-mobile text-display-lg-mobile text-primary font-bold leading-none" id="heroGaugeValue">0%</span>
+<span class="font-metric-unit text-metric-unit text-text-dim mt-0.5">PROGRES BULAN</span>
+</div>
+</div>
+<div class="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
+<span class="font-metric-unit text-metric-unit text-text-dim">TOTAL BIAYA TERCATAT</span>
+<div class="flex items-baseline gap-1 my-0.5"><span class="font-headline-metric-mobile text-headline-metric-mobile text-primary font-bold" id="heroTotal">Rp 0</span></div>
+<div class="flex items-center gap-1 text-on-surface-variant">
+<span class="material-symbols-outlined text-[15px] text-secondary">bolt</span>
+<span class="font-label-telemetry text-label-telemetry" id="heroKwhRate">0.000 kWh • Rp 0/kWh</span>
+</div>
+</div>
+</div>
+<div class="w-full rounded-lg bg-surface-charcoal p-gutter-sm flex items-center justify-between z-10">
+<div class="flex items-center gap-2">
+<div class="w-8 h-8 rounded-md bg-surface-container flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-[18px]">query_stats</span></div>
+<div class="flex flex-col">
+<span class="font-label-telemetry text-label-telemetry text-text-dim uppercase">Proyeksi Akhir Bulan</span>
+<span class="font-body-md text-body-md text-tertiary font-semibold" id="projectionValue">-</span>
+</div>
+</div>
+<span class="font-metric-unit text-metric-unit text-on-surface-variant">Estimasi linear</span>
+</div>
+</div>
 
-  <div id="monthOverlay" class="month-overlay" aria-hidden="true">
-    <div class="month-modal" role="dialog" aria-modal="true" aria-labelledby="modalMonthTitle">
-      <div class="modal-header">
-        <div>
-          <h2 id="modalMonthTitle">Januari</h2>
-          <p id="modalMonthSummary" class="muted">Rincian tagihan mingguan</p>
-        </div>
-        <button type="button" id="closeModal" class="close-modal" aria-label="Tutup">×</button>
-      </div>
-      <div id="weekList" class="week-list"></div>
-      <button type="button" id="downloadExcelBtn" class="button button-primary" style="width:100%;margin-top:18px;">⬇ Unduh rincian harian & mingguan (Excel)</button>
-      <button type="button" id="downloadPdfBtn" class="button button-secondary" style="width:100%;margin-top:10px;">📄 Unduh rincian harian & mingguan (PDF)</button>
-    </div>
-  </div>
+<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-lg flex flex-col space-y-gutter-sm">
+<div class="flex items-center justify-between">
+<div class="flex flex-col">
+<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">TREN PENGELUARAN</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">Tagihan per Bulan (Tahun Ini)</span>
+</div>
+<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined text-[18px]">bar_chart</span></div>
+</div>
+<div class="w-full bg-surface-charcoal rounded-lg p-card-pad flex flex-col space-y-gutter-sm">
+<div class="h-36 w-full flex items-end justify-between gap-gutter-xs pt-4" id="trendBars"></div>
+<div class="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-high/60">
+<span class="material-symbols-outlined text-[18px] text-primary shrink-0" id="insightIcon">trending_down</span>
+<p class="font-body-sm text-body-sm text-on-surface" id="insightText">Belum cukup data untuk membandingkan dengan bulan lalu.</p>
+</div>
+</div>
+</div>
 
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-  <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
-  <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
-  <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
-  <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
-  <script>
-"use strict";
+<div class="w-full flex flex-col space-y-gutter-sm">
+<div class="flex flex-col">
+<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">RINCIAN MINGGUAN</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">Pilih Bulan &amp; Siklus Beban</span>
+</div>
+<div class="flex items-center gap-gutter-xs overflow-x-auto pb-1" id="month-tabs"></div>
+<div class="flex flex-col space-y-gutter-xs" id="weekCards"></div>
+</div>
 
-// Read-only user (subscribe-only, cannot publish) — see web-remote/script.js.
-const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
-const MQTT_USERNAME = "smartenergymeterweb";
-const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
-const TOPIC_DATA = "smartmeter/data";
+<div class="w-full rounded-xl bg-surface-container-low p-card-pad flex flex-col space-y-gutter-sm">
+<div class="flex flex-col">
+<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">EKSPOR DATA TELEMETRI</span>
+<span class="font-title-md text-title-md text-on-surface font-semibold">Unduh Dokumen Tagihan</span>
+<p class="font-body-sm text-body-sm text-on-surface-variant">Rincian harian &amp; mingguan untuk bulan yang sedang dipilih di atas.</p>
+</div>
+<div class="grid grid-cols-1 sm:grid-cols-2 gap-gutter-sm pt-1">
+<button class="w-full rounded-lg bg-surface-container hover:bg-surface-container-high active:scale-[0.98] p-3 flex items-center justify-between transition-all group" id="downloadExcelBtn">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-primary-container/20 text-primary flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">table_view</span></div>
+<div class="flex flex-col text-left"><span class="font-body-md text-body-md text-on-surface font-semibold group-hover:text-primary transition-colors">Unduh Excel (.xlsx)</span><span class="font-metric-unit text-metric-unit text-text-dim">Rincian harian &amp; mingguan</span></div>
+</div>
+<span class="material-symbols-outlined text-[20px] text-text-dim group-hover:text-primary transition-colors">download</span>
+</button>
+<button class="w-full rounded-lg bg-surface-container hover:bg-surface-container-high active:scale-[0.98] p-3 flex items-center justify-between transition-all group" id="downloadPdfBtn">
+<div class="flex items-center gap-2.5">
+<div class="w-8 h-8 rounded bg-secondary-container/20 text-secondary flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">description</span></div>
+<div class="flex flex-col text-left"><span class="font-body-md text-body-md text-on-surface font-semibold group-hover:text-secondary transition-colors">Unduh PDF (.pdf)</span><span class="font-metric-unit text-metric-unit text-text-dim">Faktur &amp; lembar analisis</span></div>
+</div>
+<span class="material-symbols-outlined text-[20px] text-text-dim group-hover:text-secondary transition-colors">download</span>
+</button>
+</div>
+</div>
 
-const monthsGrid = document.getElementById("monthsGrid");
-const monthOverlay = document.getElementById("monthOverlay");
-const closeModalBtn = document.getElementById("closeModal");
-const modalMonthTitle = document.getElementById("modalMonthTitle");
-const modalMonthSummary = document.getElementById("modalMonthSummary");
-const weekList = document.getElementById("weekList");
-const clockEl = document.getElementById("clock");
-
-const monthNames = ["Januari","Februari","Maret","April","Mei","Juni","Juli","Agustus","September","Oktober","November","Desember"];
-
-let weeklyData = readObject("weeklyElectricity");
-let dailyData = readObject("dailyElectricity");
-
-function readObject(key) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || "{}");
-    return value && typeof value === "object" ? value : {};
-  } catch { return {}; }
-}
-
-function formatRupiah(value) {
-  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0);
-}
-
-function getElectricityRate() {
-  const rate = Number(localStorage.getItem("electricityRate"));
-  return Number.isFinite(rate) && rate > 0 ? rate : 1500;
-}
-
-function monthKey(year, monthIndex) {
-  return year + "-" + String(monthIndex + 1).padStart(2, "0");
-}
-
-function dayKey(date) {
-  return date.getFullYear() + "-" + String(date.getMonth() + 1).padStart(2, "0") + "-" + String(date.getDate()).padStart(2, "0");
-}
-
-function getWeeklyBills(year, monthIndex) {
-  const saved = weeklyData[monthKey(year, monthIndex)];
-  if (saved && typeof saved === "object") {
-    return [1,2,3,4,5].map(w => Number(saved["week" + w] || 0));
-  }
-  return [0,0,0,0,0];
-}
-
-function getMonthTotal(year, monthIndex) {
-  return getWeeklyBills(year, monthIndex).reduce((sum, v) => sum + v, 0);
-}
-
-function renderMonthCards() {
-  monthsGrid.innerHTML = "";
-  const year = new Date().getFullYear();
-  for (let month = 0; month < 12; month++) {
-    const card = document.createElement("button");
-    card.type = "button";
-    card.className = "month-card";
-    card.innerHTML = `<h3>${monthNames[month]}</h3><div class="month-total">${formatRupiah(getMonthTotal(year, month))}</div><small>Klik untuk melihat rincian →</small>`;
-    card.addEventListener("click", () => openMonth(year, month));
-    monthsGrid.appendChild(card);
-  }
-  renderTrendChart(year);
-}
-
-let trendChart;
-function renderTrendChart(year) {
-  const canvas = document.getElementById("billTrendChart");
-  if (!canvas || typeof Chart === "undefined") return;
-  const totals = monthNames.map((_, month) => getMonthTotal(year, month));
-  const shortLabels = monthNames.map((name) => name.slice(0, 3));
-
-  if (trendChart) {
-    trendChart.data.datasets[0].data = totals;
-    trendChart.update();
-    return;
-  }
-
-  trendChart = new Chart(canvas.getContext("2d"), {
-    type: "bar",
-    data: {
-      labels: shortLabels,
-      datasets: [{
-        label: "Tagihan (Rp)",
-        data: totals,
-        backgroundColor: "rgba(32,166,87,.35)",
-        borderColor: "#148a43",
-        borderWidth: 1.5,
-        borderRadius: 4,
-      }],
-    },
-    options: {
-      responsive: true,
-      animation: false,
-      plugins: {
-        legend: { display: false },
-        tooltip: { callbacks: { label: (ctx) => formatRupiah(ctx.parsed.y) } },
-      },
-      scales: {
-        x: { grid: { display: false } },
-        y: { beginAtZero: true, grid: { color: "#e8efea" }, ticks: { callback: (v) => formatRupiah(v) } },
-      },
-    },
-  });
-}
-
-let currentModalMonth = null;
-
-function openMonth(year, monthIndex) {
-  currentModalMonth = { year, monthIndex };
-  const bills = getWeeklyBills(year, monthIndex);
-  const total = bills.reduce((sum, v) => sum + v, 0);
-
-  modalMonthTitle.textContent = `${monthNames[monthIndex]} ${year}`;
-  modalMonthSummary.textContent = `Total bulan ini: ${formatRupiah(total)}`;
-  weekList.innerHTML = "";
-
-  let hasData = false;
-  for (let i = 0; i < 5; i++) {
-    const bill = bills[i];
-    const start = new Date(year, monthIndex, 1 + i * 7);
-    const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
-    const end = new Date(year, monthIndex, Math.min(1 + i * 7 + 6, lastDayOfMonth));
-
-    const row = document.createElement("div");
-    row.className = "week-row";
-    row.innerHTML = `
-      <div>
-        <strong>Minggu ${i + 1}</strong>
-        <small>${start.toLocaleDateString("id-ID")} - ${end.toLocaleDateString("id-ID")}</small>
-      </div>
-      <div class="week-bill">${formatRupiah(bill)}</div>
-    `;
-    weekList.appendChild(row);
-    if (bill > 0) hasData = true;
-  }
-
-  if (!hasData) {
-    const note = document.createElement("div");
-    note.className = "empty-week";
-    note.textContent = "Belum ada data tagihan mingguan untuk bulan ini.";
-    weekList.appendChild(note);
-  }
-
-  monthOverlay.classList.add("show");
-  monthOverlay.setAttribute("aria-hidden", "false");
-  document.body.style.overflow = "hidden";
-}
-
-function closeMonth() {
-  monthOverlay.classList.remove("show");
-  monthOverlay.setAttribute("aria-hidden", "true");
-  document.body.style.overflow = "";
-}
-
-function downloadMonthExcel() {
-  if (!currentModalMonth || typeof XLSX === "undefined") return;
-  const { year, monthIndex } = currentModalMonth;
-  const rate = getElectricityRate();
-  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
-
-  // Layout menyamping: hari jadi kolom, tiap minggu ringkas jadi 2 baris (kWh & Rp).
-  const rows = [["Minggu", "Rincian", "Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7", "Total"]];
-  const merges = [];
-  let rowIndex = 1;
-  let grandTotal = 0;
-
-  for (let week = 0; 1 + week * 7 <= lastDayOfMonth && week < 5; week++) {
-    const weekStartDay = 1 + week * 7;
-    const weekEndDay = Math.min(weekStartDay + 6, lastDayOfMonth);
-    const weekStart = new Date(year, monthIndex, weekStartDay);
-    const weekEnd = new Date(year, monthIndex, weekEndDay);
-    const weekLabel = `Minggu ${week + 1}\n${weekStart.toLocaleDateString("id-ID")} - ${weekEnd.toLocaleDateString("id-ID")}`;
-
-    const kwhRow = [weekLabel, "Pemakaian (kWh)"];
-    const rpRow = ["", "Tagihan (Rp)"];
-    let weekTotal = 0;
-
-    for (let day = weekStartDay; day <= weekStartDay + 6; day++) {
-      if (day > weekEndDay) { kwhRow.push(""); rpRow.push(""); continue; }
-      const date = new Date(year, monthIndex, day);
-      const dayBill = Number(dailyData[dayKey(date)] || 0);
-      const dayKwh = rate > 0 ? dayBill / rate : 0;
-      kwhRow.push(Number(dayKwh.toFixed(3)));
-      rpRow.push(Math.round(dayBill));
-      weekTotal += dayBill;
-    }
-
-    kwhRow.push(rate > 0 ? Number((weekTotal / rate).toFixed(3)) : 0);
-    rpRow.push(Math.round(weekTotal));
-    rows.push(kwhRow, rpRow);
-
-    // Gabung sel label minggu supaya rapi menyamping di 2 baris (kWh + Rp).
-    merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex + 1, c: 0 } });
-    rowIndex += 2;
-    grandTotal += weekTotal;
-  }
-
-  rows.push(["Total Bulan", "", "", "", "", "", "", "", "", Math.round(grandTotal)]);
-
-  const sheet = XLSX.utils.aoa_to_sheet(rows);
-  sheet["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }];
-  sheet["!merges"] = merges;
-
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, sheet, "Rincian");
-  XLSX.writeFile(workbook, `Tagihan-${monthNames[monthIndex]}-${year}.xlsx`);
-}
-
-function downloadMonthPdf() {
-  if (!currentModalMonth || typeof window.jspdf === "undefined") return;
-  const { year, monthIndex } = currentModalMonth;
-  const rate = getElectricityRate();
-  const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
-
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF({ orientation: "landscape" });
-
-  doc.setFontSize(14);
-  doc.text(`Tagihan Listrik - ${monthNames[monthIndex]} ${year}`, 14, 15);
-
-  const head = [["Minggu", "Rincian", "Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7", "Total"]];
-  const body = [];
-  let grandTotal = 0;
-
-  for (let week = 0; 1 + week * 7 <= lastDayOfMonth && week < 5; week++) {
-    const weekStartDay = 1 + week * 7;
-    const weekEndDay = Math.min(weekStartDay + 6, lastDayOfMonth);
-    const weekStart = new Date(year, monthIndex, weekStartDay);
-    const weekEnd = new Date(year, monthIndex, weekEndDay);
-    const weekLabel = `Minggu ${week + 1}\n${weekStart.toLocaleDateString("id-ID")} - ${weekEnd.toLocaleDateString("id-ID")}`;
-
-    const kwhRow = [weekLabel, "Pemakaian (kWh)"];
-    const rpRow = [weekLabel, "Tagihan (Rp)"];
-    let weekTotal = 0;
-
-    for (let day = weekStartDay; day <= weekStartDay + 6; day++) {
-      if (day > weekEndDay) { kwhRow.push(""); rpRow.push(""); continue; }
-      const date = new Date(year, monthIndex, day);
-      const dayBill = Number(dailyData[dayKey(date)] || 0);
-      const dayKwh = rate > 0 ? dayBill / rate : 0;
-      kwhRow.push(dayKwh.toFixed(3));
-      rpRow.push(formatRupiah(dayBill));
-      weekTotal += dayBill;
-    }
-
-    kwhRow.push(rate > 0 ? (weekTotal / rate).toFixed(3) : "0");
-    rpRow.push(formatRupiah(weekTotal));
-    body.push(kwhRow, rpRow);
-    grandTotal += weekTotal;
-  }
-
-  body.push(["Total Bulan", "", "", "", "", "", "", "", "", formatRupiah(grandTotal)]);
-
-  doc.autoTable({
-    head,
-    body,
-    startY: 22,
-    styles: { fontSize: 8, cellPadding: 2, valign: "middle" },
-    headStyles: { fillColor: [20, 138, 67] },
-    columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 30 } },
-  });
-
-  doc.save(`Tagihan-${monthNames[monthIndex]}-${year}.pdf`);
-}
-
-document.getElementById("downloadExcelBtn").addEventListener("click", downloadMonthExcel);
-document.getElementById("downloadPdfBtn").addEventListener("click", downloadMonthPdf);
-closeModalBtn.addEventListener("click", closeMonth);
-monthOverlay.addEventListener("click", e => { if (e.target === monthOverlay) closeMonth(); });
-document.addEventListener("keydown", e => { if (e.key === "Escape") closeMonth(); });
-
-function saveWeeklyEnergy(energy) {
-  if (!Number.isFinite(energy)) return;
-
-  const now = new Date();
-  const year = now.getFullYear();
-  const monthIndex = now.getMonth();
-  const key = monthKey(year, monthIndex);
-  // Tanggal 1-7 = minggu 1, 8-14 = minggu 2, ... 29-31 = minggu 5
-  const week = Math.min(Math.floor((now.getDate() - 1) / 7) + 1, 5);
-
-  let starts = readObject("weeklyEnergyStart");
-  if (!starts[key]) starts[key] = {};
-  if (starts[key]["week" + week] === undefined) {
-    starts[key]["week" + week] = energy;
-    localStorage.setItem("weeklyEnergyStart", JSON.stringify(starts));
-  }
-
-  let usedEnergy = energy - Number(starts[key]["week" + week]);
-  if (usedEnergy < 0) {
-    starts[key]["week" + week] = energy;
-    usedEnergy = 0;
-    localStorage.setItem("weeklyEnergyStart", JSON.stringify(starts));
-  }
-
-  if (!weeklyData[key]) weeklyData[key] = {};
-  weeklyData[key]["week" + week] = usedEnergy * getElectricityRate();
-  localStorage.setItem("weeklyElectricity", JSON.stringify(weeklyData));
-
-  renderMonthCards();
-}
-
-function saveDailyEnergy(energy) {
-  if (!Number.isFinite(energy)) return;
-
-  const key = dayKey(new Date());
-
-  let starts = readObject("dailyEnergyStart");
-  if (starts[key] === undefined) {
-    starts[key] = energy;
-    localStorage.setItem("dailyEnergyStart", JSON.stringify(starts));
-  }
-
-  let usedEnergy = energy - Number(starts[key]);
-  if (usedEnergy < 0) {
-    starts[key] = energy;
-    usedEnergy = 0;
-    localStorage.setItem("dailyEnergyStart", JSON.stringify(starts));
-  }
-
-  dailyData[key] = usedEnergy * getElectricityRate();
-  localStorage.setItem("dailyElectricity", JSON.stringify(dailyData));
-}
-
-let mqttClient = null;
-function connectMQTT() {
-  mqttClient = mqtt.connect(MQTT_WS_URL, {
-    username: MQTT_USERNAME,
-    password: MQTT_PASSWORD,
-    clientId: "bill-" + Math.random().toString(16).slice(2),
-    reconnectPeriod: 3000,
-  });
-  mqttClient.on("connect", () => mqttClient.subscribe(TOPIC_DATA));
-  mqttClient.on("message", (topic, message) => {
-    if (topic !== TOPIC_DATA) return;
-    try {
-      const data = JSON.parse(message.toString());
-      if (data.energy !== undefined) {
-        const energy = Number(data.energy);
-        saveWeeklyEnergy(energy);
-        saveDailyEnergy(energy);
-      }
-    } catch { /* ignore malformed packet */ }
-  });
-}
-
-function updateClock() { clockEl.textContent = new Date().toLocaleTimeString("id-ID"); }
-setInterval(updateClock, 1000);
-
-window.addEventListener("load", () => {
-  renderMonthCards();
-  updateClock();
-  connectMQTT();
-});
-  </script>
+</div>
+</main>
+<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-lowest/85 backdrop-blur-xl shadow-[0_-1px_12px_rgba(0,0,0,0.3)]">
+<div class="flex justify-around items-center h-16 px-gutter-sm">
+<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html"><span class="material-symbols-outlined text-[22px]">speed</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Monitor</span></a>
+<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html#riwayat-section"><span class="material-symbols-outlined text-[22px]">monitoring</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Riwayat</span></a>
+<a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 transition-colors text-primary border-t-2 border-primary" href="#"><span class="material-symbols-outlined text-[22px]">receipt_long</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Tagihan</span></a>
+<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html#pengaturan-section"><span class="material-symbols-outlined text-[22px]">settings_ethernet</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Pengaturan</span></a>
+</div>
+</nav>
+<script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
+<script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
+<script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="bill.js"></script>
 </body>
 </html>
