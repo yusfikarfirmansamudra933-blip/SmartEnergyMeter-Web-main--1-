@@ -4,33 +4,30 @@
 const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const MQTT_USERNAME = "smartenergymeterweb";
 const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
+// Billing history is computed server-side (api/monitor.js, run by an
+// external cron) and shared via these retained topics — every browser
+// reads the SAME data, instead of each one tracking its own copy in
+// localStorage (which meant your bill history didn't follow you between
+// devices).
+const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
+const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
 
 const $ = (id) => document.getElementById(id);
 const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 const monthShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep", "Okt", "Nov", "Des"];
 
-let weeklyData = readObject("weeklyElectricity");
-let dailyData = readObject("dailyElectricity");
+let weeklyData = {};
+let dailyData = {};
 let selectedMonth = new Date().getMonth();
 const selectedYear = new Date().getFullYear();
-
-function readObject(key) {
-  try {
-    const value = JSON.parse(localStorage.getItem(key) || "{}");
-    return value && typeof value === "object" ? value : {};
-  } catch { return {}; }
-}
 
 function formatRupiah(value) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
-function getElectricityRate() {
-  const rate = Number(localStorage.getItem("electricityRate"));
-  return Number.isFinite(rate) && rate > 0 ? rate : 1500;
-}
+// Must match ELECTRICITY_RATE in api/monitor.js — there's no per-user rate
+// setting (no UI for it), this is just the single source of truth.
+function getElectricityRate() { return 1500; }
 
 function monthKey(year, monthIndex) { return `${year}-${String(monthIndex + 1).padStart(2, "0")}`; }
 function dayKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
@@ -330,56 +327,6 @@ function downloadMonthPdf() {
   doc.save(`Tagihan-${monthNames[monthIndex]}-${year}.pdf`);
 }
 
-// --- Pelacakan energi harian/mingguan dari data MQTT ---
-
-function saveWeeklyEnergy(energy) {
-  if (!Number.isFinite(energy)) return;
-  const now = new Date();
-  const key = monthKey(now.getFullYear(), now.getMonth());
-  const week = Math.min(Math.floor((now.getDate() - 1) / 7) + 1, 5);
-
-  let starts = readObject("weeklyEnergyStart");
-  if (!starts[key]) starts[key] = {};
-  if (starts[key]["week" + week] === undefined) {
-    starts[key]["week" + week] = energy;
-    localStorage.setItem("weeklyEnergyStart", JSON.stringify(starts));
-  }
-
-  let usedEnergy = energy - Number(starts[key]["week" + week]);
-  if (usedEnergy < 0) {
-    starts[key]["week" + week] = energy;
-    usedEnergy = 0;
-    localStorage.setItem("weeklyEnergyStart", JSON.stringify(starts));
-  }
-
-  if (!weeklyData[key]) weeklyData[key] = {};
-  weeklyData[key]["week" + week] = usedEnergy * getElectricityRate();
-  localStorage.setItem("weeklyElectricity", JSON.stringify(weeklyData));
-
-  renderAll();
-}
-
-function saveDailyEnergy(energy) {
-  if (!Number.isFinite(energy)) return;
-  const key = dayKey(new Date());
-
-  let starts = readObject("dailyEnergyStart");
-  if (starts[key] === undefined) {
-    starts[key] = energy;
-    localStorage.setItem("dailyEnergyStart", JSON.stringify(starts));
-  }
-
-  let usedEnergy = energy - Number(starts[key]);
-  if (usedEnergy < 0) {
-    starts[key] = energy;
-    usedEnergy = 0;
-    localStorage.setItem("dailyEnergyStart", JSON.stringify(starts));
-  }
-
-  dailyData[key] = usedEnergy * getElectricityRate();
-  localStorage.setItem("dailyElectricity", JSON.stringify(dailyData));
-}
-
 function renderAll() {
   renderHero();
   renderInsight();
@@ -399,21 +346,18 @@ function connectMQTT() {
   });
   mqttClient.on("connect", () => {
     $("brokerBadge").textContent = "Terhubung";
-    mqttClient.subscribe(TOPIC_STATUS);
-    mqttClient.subscribe(TOPIC_DATA);
+    mqttClient.subscribe(TOPIC_BILLING_DAILY);
+    mqttClient.subscribe(TOPIC_BILLING_WEEKLY);
   });
   mqttClient.on("reconnect", () => { $("brokerBadge").textContent = "Mencoba ulang"; });
   mqttClient.on("close", () => { $("brokerBadge").textContent = "Terputus"; });
   mqttClient.on("message", (topic, message) => {
-    if (topic === TOPIC_STATUS) return; // dipakai di dashboard utama; halaman ini fokus pada histori tersimpan.
-    if (topic !== TOPIC_DATA) return;
     try {
-      const data = JSON.parse(message.toString());
-      if (data.energy !== undefined) {
-        const energy = Number(data.energy);
-        saveWeeklyEnergy(energy);
-        saveDailyEnergy(energy);
-      }
+      const parsed = JSON.parse(message.toString());
+      if (topic === TOPIC_BILLING_DAILY) dailyData = parsed;
+      else if (topic === TOPIC_BILLING_WEEKLY) weeklyData = parsed;
+      else return;
+      renderAll();
     } catch { /* ignore malformed packet */ }
   });
 }

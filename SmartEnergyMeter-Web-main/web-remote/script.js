@@ -9,6 +9,7 @@ const MQTT_USERNAME = "smartenergymeterweb";
 const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
 const TOPIC_DATA = "smartmeter/data";
 const TOPIC_STATUS = "smartmeter/status";
+const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
 
 const ONLINE_COLOR = "#4edea3";
 const OFFLINE_COLOR = "#ffb4ab";
@@ -187,36 +188,33 @@ function connectMQTT() {
     setBrokerStatus("Terhubung ke broker");
     client.subscribe(TOPIC_STATUS);
     client.subscribe(TOPIC_DATA);
+    client.subscribe(TOPIC_BILLING_WEEKLY);
   });
   client.on("reconnect", () => setBrokerStatus("Mencoba ulang…"));
   client.on("close", () => setBrokerStatus("Terputus dari broker"));
   client.on("error", () => setBrokerStatus("Koneksi broker bermasalah"));
   client.on("message", (topic, payload) => {
     if (topic === TOPIC_STATUS) { setDeviceStatus(payload.toString() === "online"); return; }
+    if (topic === TOPIC_BILLING_WEEKLY) {
+      try { applyBillPreview(JSON.parse(payload.toString())); } catch { /* ignore malformed packet */ }
+      return;
+    }
     if (topic !== TOPIC_DATA) return;
     try { applyStatus(JSON.parse(payload.toString())); } catch { /* ignore malformed packet */ }
   });
 }
 
-// Estimasi tagihan bulan berjalan, dibaca dari data yang sama dipakai
-// bill.html (localStorage bersama, sama origin) — bukan angka fiktif.
-function getElectricityRate() {
-  const rate = Number(localStorage.getItem("electricityRate"));
-  return Number.isFinite(rate) && rate > 0 ? rate : 1500;
-}
-
-function updateBillPreview() {
-  try {
-    const weeklyData = JSON.parse(localStorage.getItem("weeklyElectricity") || "{}");
-    const now = new Date();
-    const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
-    const weeks = weeklyData[key] || {};
-    let total = 0;
-    for (let w = 1; w <= 5; w++) total += Number(weeks["week" + w] || 0);
-    setText("bill-preview", new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(total));
-  } catch {
-    setText("bill-preview", "Rp 0");
-  }
+// Estimasi tagihan bulan berjalan — dihitung server-side (api/monitor.js)
+// dan dibagikan lewat MQTT retained, sama seperti yang dipakai bill.html.
+// Sebelumnya nilai ini dari localStorage per-browser, jadi tidak sinkron
+// antar perangkat; sekarang satu sumber data untuk semua.
+function applyBillPreview(weeklyData) {
+  const now = new Date();
+  const key = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
+  const weeks = (weeklyData && weeklyData[key]) || {};
+  let total = 0;
+  for (let w = 1; w <= 5; w++) total += Number(weeks["week" + w] || 0);
+  setText("bill-preview", new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(total));
 }
 
 function updateClock() { setText("telemetry-clock", new Date().toLocaleTimeString("id-ID")); }
@@ -255,7 +253,6 @@ function setupBottomNav() {
 
 window.addEventListener("load", () => {
   updateClock();
-  updateBillPreview();
   setupChartTabs();
   setupBottomNav();
   connectMQTT();
@@ -263,7 +260,6 @@ window.addEventListener("load", () => {
 
   $("btn-refresh")?.addEventListener("click", () => connectMQTT());
   $("btn-reconnect")?.addEventListener("click", () => connectMQTT());
-  window.addEventListener("storage", updateBillPreview);
 
   setInterval(updateClock, 1000);
   setInterval(() => {
