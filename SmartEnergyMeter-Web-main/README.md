@@ -48,7 +48,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 |---|---|---|
 | (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
 | `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/data`, `smartmeter/status` saja. **Publish harus di-deny** (topic `#`) |
-| `smartenergymeterbot` | Bot Telegram (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`. Publish `smartmeter/cmd/limit` dan `smartmeter/telegram/#` |
+| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`, `smartmeter/billing/#`. Publish `smartmeter/cmd/limit`, `smartmeter/telegram/#`, `smartmeter/billing/#` |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
 
@@ -63,6 +63,10 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 | `smartmeter/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
 | `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained |
 | `smartmeter/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload), retained |
+| `smartmeter/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan terkirim (dedup), retained |
+| `smartmeter/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, histori harian bersama semua device, retained |
+| `smartmeter/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
+| `smartmeter/billing/daily_start`, `smartmeter/billing/weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu, dipakai hitung delta pemakaian, retained |
 
 ## Menyiapkan dashboard cloud & bot Telegram (`web-remote/`)
 
@@ -74,7 +78,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
    - `TELEGRAM_BOT_TOKEN` — token dari [@BotFather](https://t.me/BotFather)
 4. Daftarkan webhook bot: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain-vercel>/api/telegram"`
 5. Daftarkan daftar command bot (untuk autocomplete `/` di Telegram) lewat `setMyCommands` — lihat daftar command di bawah.
-6. Untuk notifikasi otomatis (offline/overload), panggil `GET /api/monitor` secara berkala. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.
+6. `GET /api/monitor` harus dipanggil secara berkala — endpoint ini bukan cuma untuk notifikasi (offline/overload), tapi juga **satu-satunya tempat** yang menghitung & menyimpan histori tagihan harian/mingguan (`smartmeter/billing/*`), dan mengirim ringkasan Telegram (21:00 WIB harian, Minggu 21:00 WIB mingguan). Kalau endpoint ini tidak pernah dipanggil, histori tagihan tidak akan pernah ter-update. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.
 
 ### Command bot Telegram
 
