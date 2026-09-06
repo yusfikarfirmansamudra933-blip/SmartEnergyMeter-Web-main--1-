@@ -128,32 +128,54 @@ function updateDashboard() {
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
 }
 
-function buildPath(values) {
-  if (!values.length) return { line: "", area: "", lastX: 300, lastY: 50, max: 0 };
-  const max = Math.max(...values, 0.001);
-  const min = Math.min(...values, 0);
-  const range = max - min || 1;
+// Fixed scales instead of auto-fitting to whatever's in the current data
+// window — auto-fit made the line always stretch to fill the full height
+// (even a current reading jittering by 0.01A looked like a dramatic swing)
+// and the background gridlines were purely decorative since they didn't
+// correspond to any real value. Power/current follow the same limit-based
+// range already used for the round gauges above, so a "70% full" gauge and
+// a trace sitting 70% up the chart mean the same thing.
+function getMetricRange(metric) {
+  const limit = Math.max(number(meter.limit), 1);
+  if (metric === "voltage") return { min: 180, max: 250 };
+  if (metric === "current") return { min: 0, max: limit / 220 };
+  return { min: 0, max: limit };
+}
+
+function buildPath(values, min, max) {
+  if (!values.length) return { line: "", area: "", lastX: 300, lastY: 90 };
+  const range = (max - min) || 1;
   const n = values.length;
   const stepX = n > 1 ? 300 / (n - 1) : 0;
-  const points = values.map((v, i) => [n > 1 ? i * stepX : 300, 90 - ((v - min) / range) * 80]);
+  const points = values.map((v, i) => {
+    const clamped = Math.min(max, Math.max(min, v));
+    return [n > 1 ? i * stepX : 300, 90 - ((clamped - min) / range) * 80];
+  });
   const line = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
   const [lastX, lastY] = points[points.length - 1];
-  return { line, area: `${line} L${lastX.toFixed(1)},100 L0,100 Z`, lastX, lastY, max };
+  return { line, area: `${line} L${lastX.toFixed(1)},100 L0,100 Z`, lastX, lastY };
 }
 
 function renderChart() {
   const dataMap = { power: powerValues, voltage: voltageValues, current: currentValues };
   const values = dataMap[chartState.metric] || [];
-  const { line, area, lastX, lastY, max } = buildPath(values);
+  const { min, max } = getMetricRange(chartState.metric);
+  const { line, area, lastX, lastY } = buildPath(values, min, max);
   const lineEl = $("telemetry-line");
   const areaEl = $("telemetry-area");
   const dotEl = $("telemetry-dot");
   if (lineEl) lineEl.setAttribute("d", line);
   if (areaEl) areaEl.setAttribute("d", area);
   if (dotEl && values.length) { dotEl.setAttribute("cx", lastX.toFixed(1)); dotEl.setAttribute("cy", lastY.toFixed(1)); }
+
   const unit = chartState.metric === "power" ? "W" : chartState.metric === "voltage" ? "V" : "A";
   const digits = chartState.metric === "current" ? 2 : 0;
-  setText("chart-max-label", values.length ? `Maks ${format(max, digits)}${unit}` : "-");
+  setText("axis-top", `${format(max, digits)}${unit}`);
+  setText("axis-mid", `${format(min + (max - min) / 2, digits)}${unit}`);
+  setText("axis-bottom", `${format(min, digits)}${unit}`);
+
+  const observedMax = values.length ? Math.max(...values) : 0;
+  setText("chart-max-label", values.length ? `Puncak ${format(observedMax, digits)}${unit}` : "-");
 }
 
 function updateChart() {

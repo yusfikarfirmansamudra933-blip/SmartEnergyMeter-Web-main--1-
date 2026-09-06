@@ -87,7 +87,14 @@
 <div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined text-[18px]">bar_chart</span></div>
 </div>
 <div class="w-full bg-surface-charcoal rounded-lg p-card-pad flex flex-col space-y-gutter-sm">
-<div class="h-36 w-full flex items-end justify-between gap-gutter-xs pt-4" id="trendBars"></div>
+<div class="w-full flex gap-2">
+<div class="h-36 flex flex-col justify-between items-end shrink-0 pt-4 text-text-dim font-metric-unit text-metric-unit">
+<span id="trendAxisTop">-</span>
+<span id="trendAxisMid">-</span>
+<span>Rp 0</span>
+</div>
+<div class="h-36 flex-1 min-w-0 flex items-end gap-gutter-xs pt-4 overflow-x-auto" id="trendBars"></div>
+</div>
 <div class="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-high/60">
 <span class="material-symbols-outlined text-[18px] text-primary shrink-0" id="insightIcon">trending_down</span>
 <p class="font-body-sm text-body-sm text-on-surface" id="insightText">Belum cukup data untuk membandingkan dengan bulan lalu.</p>

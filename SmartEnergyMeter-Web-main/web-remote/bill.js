@@ -120,14 +120,23 @@ function renderTrendBars() {
   container.innerHTML = "";
   const now = new Date();
   const totals = monthNames.map((_, m) => getMonthTotal(selectedYear, m));
-  const max = Math.max(...totals, 1);
+  const dataMax = Math.max(...totals, 1);
+  // 20% headroom so the tallest bar doesn't pin to the very top every time —
+  // without it, whichever month has any data at all always looks "maxed
+  // out" since it's also whatever `max` normalizes against.
+  const scaleMax = dataMax * 1.2;
+  $("trendAxisTop").textContent = formatRupiah(scaleMax);
+  $("trendAxisMid").textContent = formatRupiah(scaleMax / 2);
 
   totals.forEach((total, m) => {
-    const heightPct = Math.max(4, (total / max) * 100);
+    const heightPct = Math.max(4, (total / scaleMax) * 100);
     const isCurrent = m === now.getMonth() && selectedYear === now.getFullYear();
     const isFuture = selectedYear === now.getFullYear() && m > now.getMonth();
     const col = document.createElement("div");
-    col.className = "flex flex-col items-center flex-1 h-full justify-end group";
+    // Fixed width + shrink-0 (was flex-1) so 12 columns can't be squeezed
+    // narrower than their content and silently overflow the card on a
+    // phone screen — the container scrolls horizontally instead now.
+    col.className = "flex flex-col items-center shrink-0 w-12 h-full justify-end group";
     col.innerHTML = `
       <span class="font-label-telemetry text-[10px] ${isCurrent ? "text-primary font-semibold" : "text-text-dim opacity-0 group-hover:opacity-100"} transition-opacity">${total > 0 ? formatRupiah(total) : ""}</span>
       <div class="w-full max-w-[28px] ${isCurrent ? "bg-gradient-to-t from-secondary-container to-primary shadow-md shadow-primary/30" : isFuture ? "bg-surface-container-high opacity-40" : "bg-surface-container-highest hover:bg-secondary/40"} rounded-t transition-all" style="height:${isFuture && total === 0 ? 12 : heightPct}%;"></div>

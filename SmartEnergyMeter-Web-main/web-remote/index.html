@@ -228,16 +228,23 @@
 <span class="font-metric-unit text-metric-unit" id="chart-max-label">-</span>
 <span class="font-label-telemetry text-label-telemetry text-primary flex items-center gap-1"><span class="w-1.5 h-1.5 rounded-full bg-primary animate-ping"></span> Live Trace</span>
 </div>
-<div class="w-full h-28 relative">
+<div class="w-full h-28 flex gap-2">
+<div class="flex flex-col justify-between items-end shrink-0 py-0.5 text-text-dim font-metric-unit text-metric-unit" id="chart-axis">
+<span id="axis-top">-</span>
+<span id="axis-mid">-</span>
+<span id="axis-bottom">-</span>
+</div>
+<div class="flex-1 min-w-0 relative">
 <svg class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 300 100">
 <defs><linearGradient id="chartGlow" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stop-color="#4edea3" stop-opacity="0.3"></stop><stop offset="100%" stop-color="#4edea3" stop-opacity="0.0"></stop></linearGradient></defs>
-<line stroke="#222a3d" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="300" y1="25" y2="25"></line>
+<line stroke="#222a3d" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="300" y1="10" y2="10"></line>
 <line stroke="#222a3d" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="300" y1="50" y2="50"></line>
-<line stroke="#222a3d" stroke-width="1" x1="0" x2="300" y1="75" y2="75"></line>
+<line stroke="#222a3d" stroke-width="1" x1="0" x2="300" y1="90" y2="90"></line>
 <path d="" fill="url(#chartGlow)" id="telemetry-area"></path>
 <path class="drop-shadow-[0_0_6px_rgba(78,222,163,0.7)]" d="" fill="none" id="telemetry-line" stroke="#4edea3" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5"></path>
 <circle cx="300" cy="50" fill="#4edea3" id="telemetry-dot" r="4"></circle>
 </svg>
+</div>
 </div>
 <div class="flex justify-between items-center text-text-dim font-metric-unit text-metric-unit pt-1">
 <span>-40 sampel</span><span>-20 sampel</span><span>Sekarang</span>
