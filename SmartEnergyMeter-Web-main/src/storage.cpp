@@ -48,3 +48,18 @@ void resetConfig()
 
     preferences.putFloat("limit", powerLimit);
 }
+
+bool isOtaPendingVerify()
+{
+    return preferences.getBool("otaPending", false);
+}
+
+void markOtaPendingVerify()
+{
+    preferences.putBool("otaPending", true);
+}
+
+void clearOtaPendingVerify()
+{
+    preferences.putBool("otaPending", false);
+}

@@ -192,6 +192,15 @@ void handleFirmwareUpdateResult(AsyncWebServerRequest *request)
     const bool success = !Update.hasError();
     oledOtaResult(success);
 
+    // Read back by main.cpp's setup() on the very next boot — see
+    // storage.h. If that firmware can't even get WiFi up, it rolls itself
+    // back to the partition we're running right now instead of leaving the
+    // device stranded on a broken update.
+    if (success)
+    {
+        markOtaPendingVerify();
+    }
+
     // Update.errorString() is safe to call even when there's no error (it
     // reads back "No Error" in that case) — surfacing it always means the
     // real failure reason is visible from the HTTP response alone, without

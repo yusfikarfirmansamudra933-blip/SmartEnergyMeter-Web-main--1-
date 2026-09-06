@@ -243,6 +243,26 @@ display.display();
 
 }
 
+// Draws directly (see oled.h doc comment) — only ever called from setup(),
+// where nothing else is touching the display yet, so there's no need to
+// route it through the otaActive state machine the way the other two do.
+void oledOtaVerifyScreen(const char *status)
+{
+
+display.clearDisplay();
+
+display.setTextSize(1);
+
+drawHeader("Update Firmware");
+
+display.setCursor(0,14);
+
+display.print(status);
+
+display.display();
+
+}
+
 void oledLoop()
 {
 

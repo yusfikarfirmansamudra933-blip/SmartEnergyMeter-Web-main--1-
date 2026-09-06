@@ -19,4 +19,10 @@ void oledOtaProgress(uint8_t percent);
 // so there is no page cycling to resume.
 void oledOtaResult(bool success);
 
+// Draws immediately instead of just setting state, unlike the two above —
+// only safe to call from main.cpp's setup(), before oledLoop() is ever
+// reachable (the post-OTA rollback check runs synchronously there, so
+// there's nothing else contending for the display yet).
+void oledOtaVerifyScreen(const char *status);
+
 #endif
