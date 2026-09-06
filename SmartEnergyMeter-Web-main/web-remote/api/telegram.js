@@ -13,9 +13,15 @@ const TOPIC_DATA = "smartmeter/data";
 const TOPIC_STATUS = "smartmeter/status";
 const TOPIC_LIMIT_CMD = "smartmeter/cmd/limit";
 const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
+const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
+// Reminder is user-set (not auto-computed like the daily/weekly summary),
+// so it lives under telegram/# rather than billing/# — see monitor.js for
+// the cron side that actually fires it.
+const TOPIC_REMINDER = "smartmeter/telegram/reminder";
 
 const MIN_LIMIT = 100;
 const MAX_LIMIT = 10000;
+const REMINDER_HOUR_WIB = 8;
 
 function connectBot() {
   return mqtt.connect(MQTT_WS_URL, {
@@ -87,6 +93,19 @@ function publishAndWait(topic, message, { retain = false } = {}) {
   });
 }
 
+// Reads a single retained topic (or null if nothing was retained / timed out).
+function fetchTopic(topic, timeoutMs = 4000) {
+  return new Promise((resolve) => {
+    const client = connectBot();
+    let value = null;
+    const finish = () => { clearTimeout(timer); client.end(true); resolve(value); };
+    const timer = setTimeout(finish, timeoutMs);
+    client.on("connect", () => client.subscribe(topic));
+    client.on("message", (t, payload) => { if (t === topic) { value = payload.toString(); finish(); } });
+    client.on("error", finish);
+  });
+}
+
 function saveChatId(chatId) {
   return publishAndWait(TOPIC_CHAT_ID, String(chatId), { retain: true }).catch((err) => {
     console.error("Failed to save chat id:", err);
@@ -96,6 +115,20 @@ function saveChatId(chatId) {
 function num(value, digits) {
   return Number(value || 0).toFixed(digits);
 }
+
+function safeParse(str, fallback) {
+  try { return str ? JSON.parse(str) : fallback; } catch { return fallback; }
+}
+
+function formatRupiah(value) {
+  return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0);
+}
+
+// WIB (UTC+7) wall-clock time as a Date whose getUTC* fields read as WIB —
+// same trick as api/monitor.js, keeps this file's date math independent of
+// the serverless runtime's local timezone.
+function nowWIB() { return new Date(Date.now() + 7 * 60 * 60 * 1000); }
+function dayKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`; }
 
 function statusText(data) {
   return [
@@ -142,10 +175,87 @@ const HELP_TEXT = [
   "/limit - lihat batas daya saat ini",
   "/setlimit <angka> - ubah batas daya, contoh: /setlimit 500",
   "/status - semua data sekaligus",
+  "/riwayat - grafik & rincian biaya 7 hari terakhir",
+  "/reminder <tanggal> <pesan> - pengingat bayar listrik tiap bulan, contoh: /reminder 25 Jangan lupa bayar listrik!",
+  "/reminder - lihat pengingat yang aktif",
+  "/reminder off - matikan pengingat",
   "",
   "Kirim /start sekali supaya saya bisa kirim notifikasi otomatis (offline / kelebihan batas daya).",
   "Atau tanya bebas juga bisa, misalnya \"berapa watt sekarang\".",
 ].join("\n");
+
+// Renders the last 7 days of billing history (smartmeter/billing/daily,
+// already computed by api/monitor.js) as a QuickChart bar chart. QuickChart
+// takes the chart spec straight in the URL and Telegram fetches that URL
+// itself for sendPhoto, so no image handling/hosting needed on our side.
+async function handleHistory() {
+  const raw = await fetchTopic(TOPIC_BILLING_DAILY);
+  const dailyData = safeParse(raw, {});
+  const wib = nowWIB();
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(wib.getTime() - i * 24 * 60 * 60 * 1000);
+    const key = dayKeyOf(d);
+    days.push({ label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`, rp: Number(dailyData[key] || 0) });
+  }
+
+  if (days.every((d) => d.rp === 0)) {
+    return { text: "📉 Belum ada data riwayat pemakaian 7 hari terakhir." };
+  }
+
+  const chartConfig = {
+    type: "bar",
+    data: {
+      labels: days.map((d) => d.label),
+      datasets: [{ label: "Biaya listrik (Rp)", data: days.map((d) => d.rp), backgroundColor: "#3b82f6" }],
+    },
+    options: { plugins: { legend: { display: false }, title: { display: true, text: "Pemakaian 7 Hari Terakhir" } } },
+  };
+  const photoUrl = "https://quickchart.io/chart?w=600&h=350&c=" + encodeURIComponent(JSON.stringify(chartConfig));
+  const total = days.reduce((sum, d) => sum + d.rp, 0);
+  const text = [
+    "📊 Riwayat 7 Hari Terakhir",
+    ...days.map((d) => `${d.label}: ${formatRupiah(d.rp)}`),
+    "",
+    `Total: ${formatRupiah(total)}`,
+  ].join("\n");
+  return { text, photoUrl };
+}
+
+// "25 Jangan lupa bayar listrik!" -> { day: 25, message: "Jangan lupa..." }
+function parseReminderArg(arg) {
+  const match = (arg || "").trim().match(/^(\d{1,2})\s+([\s\S]+)$/);
+  if (!match) return null;
+  const day = Number(match[1]);
+  // Capped at 28 so the reminder always fires, even in February.
+  if (!Number.isFinite(day) || day < 1 || day > 28) return null;
+  return { day, message: match[2].trim() };
+}
+
+async function handleReminder(arg) {
+  const trimmed = (arg || "").trim();
+
+  if (!trimmed) {
+    const reminder = safeParse(await fetchTopic(TOPIC_REMINDER), null);
+    if (!reminder) {
+      return "🔕 Belum ada pengingat pembayaran.\nSet dengan /reminder <tanggal> <pesan>, contoh: /reminder 25 Jangan lupa bayar listrik!";
+    }
+    return `🔔 Pengingat aktif: tanggal ${reminder.day} tiap bulan, jam ${REMINDER_HOUR_WIB}:00 WIB\nPesan: "${reminder.message}"\n\nKirim /reminder off untuk matikan.`;
+  }
+
+  if (trimmed.toLowerCase() === "off") {
+    // Empty retained payload clears it — same convention as a normal MQTT delete.
+    await publishAndWait(TOPIC_REMINDER, "", { retain: true });
+    return "🔕 Pengingat pembayaran dimatikan.";
+  }
+
+  const parsed = parseReminderArg(trimmed);
+  if (!parsed) {
+    return "Format: /reminder <tanggal 1-28> <pesan>\nContoh: /reminder 25 Jangan lupa bayar listrik!\nAtau /reminder off untuk matikan.";
+  }
+  await publishAndWait(TOPIC_REMINDER, JSON.stringify(parsed), { retain: true });
+  return `✅ Pengingat diset: tanggal ${parsed.day} tiap bulan, jam ${REMINDER_HOUR_WIB}:00 WIB\nPesan: "${parsed.message}"`;
+}
 
 // Parses "/setlimit@yusfikar_bot 500" -> { command: "setlimit", arg: "500" }.
 function parseCommand(text) {
@@ -179,6 +289,14 @@ async function sendTelegramMessage(chatId, text) {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ chat_id: chatId, text }),
+  });
+}
+
+async function sendTelegramPhoto(chatId, photoUrl, caption) {
+  await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption }),
   });
 }
 
@@ -216,10 +334,17 @@ module.exports = async (req, res) => {
   await saveChatId(chatId);
 
   let reply;
+  let photoReply = null;
   if (isHelp) {
     reply = HELP_TEXT;
   } else if (command === "setlimit") {
     reply = await handleSetLimit(parsed.arg);
+  } else if (command === "riwayat" || command === "history") {
+    const result = await handleHistory();
+    if (result.photoUrl) photoReply = { url: result.photoUrl, caption: result.text };
+    else reply = result.text;
+  } else if (command === "reminder" || command === "pengingat") {
+    reply = await handleReminder(parsed.arg);
   } else {
     try {
       const { status, data } = await fetchDeviceState();
@@ -234,7 +359,8 @@ module.exports = async (req, res) => {
   }
 
   try {
-    await sendTelegramMessage(chatId, reply);
+    if (photoReply) await sendTelegramPhoto(chatId, photoReply.url, photoReply.caption);
+    else await sendTelegramMessage(chatId, reply);
   } catch (err) {
     console.error("Failed to send Telegram message:", err);
   }

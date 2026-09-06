@@ -19,6 +19,9 @@ const TOPIC_STATUS = "smartmeter/status";
 const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
 const TOPIC_ALERT_STATE = "smartmeter/telegram/alert_state";
 const TOPIC_SUMMARY_STATE = "smartmeter/telegram/summary_state";
+const TOPIC_REMINDER = "smartmeter/telegram/reminder";
+const TOPIC_REMINDER_STATE = "smartmeter/telegram/reminder_state";
+const REMINDER_HOUR_WIB = 8;
 const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
 const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
 const TOPIC_BILLING_DAILY_START = "smartmeter/billing/daily_start";
@@ -179,10 +182,30 @@ async function checkSummaries(chatId, wib, dailyData, weeklyData, summaryStateRa
   }
 }
 
+// User-set reminder (day-of-month + message, from the bot's /reminder
+// command) fired once a month at a fixed hour, deduped the same way as
+// checkSummaries: a retained "month already sent" marker.
+async function checkReminder(chatId, wib, reminderRaw, reminderStateRaw) {
+  const reminder = safeParse(reminderRaw, null);
+  if (!reminder || !reminder.day || !reminder.message) return;
+
+  const state = safeParse(reminderStateRaw, {});
+  const monthKey = monthKeyOf(wib);
+  if (wib.getUTCDate() !== reminder.day || wib.getUTCHours() !== REMINDER_HOUR_WIB || state.lastSent === monthKey) {
+    return;
+  }
+
+  await sendTelegramMessage(chatId, `🔔 Pengingat Pembayaran Listrik\n${reminder.message}`);
+  state.lastSent = monthKey;
+  try { await publishAndWait(TOPIC_REMINDER_STATE, JSON.stringify(state), { retain: true }); }
+  catch (err) { console.error("Failed to save reminder state:", err); }
+}
+
 module.exports = async (req, res) => {
   const values = await fetchRetained([
     TOPIC_STATUS, TOPIC_DATA, TOPIC_CHAT_ID, TOPIC_ALERT_STATE, TOPIC_SUMMARY_STATE,
     TOPIC_BILLING_DAILY, TOPIC_BILLING_WEEKLY, TOPIC_BILLING_DAILY_START, TOPIC_BILLING_WEEKLY_START,
+    TOPIC_REMINDER, TOPIC_REMINDER_STATE,
   ]);
 
   const isOffline = values[TOPIC_STATUS] !== "online";
@@ -244,6 +267,9 @@ module.exports = async (req, res) => {
 
   try { await checkSummaries(chatId, nowWIB(), dailyData, weeklyData, values[TOPIC_SUMMARY_STATE]); }
   catch (err) { console.error("checkSummaries failed:", err); }
+
+  try { await checkReminder(chatId, nowWIB(), values[TOPIC_REMINDER], values[TOPIC_REMINDER_STATE]); }
+  catch (err) { console.error("checkReminder failed:", err); }
 
   res.status(200).json({ ok: true, isOffline, notifications: notifications.length });
 };
