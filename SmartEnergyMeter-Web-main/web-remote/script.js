@@ -128,18 +128,35 @@ function updateDashboard() {
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
 }
 
-// Fixed scales instead of auto-fitting to whatever's in the current data
-// window — auto-fit made the line always stretch to fill the full height
-// (even a current reading jittering by 0.01A looked like a dramatic swing)
-// and the background gridlines were purely decorative since they didn't
-// correspond to any real value. Power/current follow the same limit-based
-// range already used for the round gauges above, so a "70% full" gauge and
-// a trace sitting 70% up the chart mean the same thing.
-function getMetricRange(metric) {
+// A fixed baseline scale instead of auto-fitting to whatever's in the
+// current data window — auto-fit made the line always stretch to fill the
+// full height (even a current reading jittering by 0.01A looked like a
+// dramatic swing) and the background gridlines were purely decorative
+// since they didn't correspond to any real value. Power/current follow the
+// same limit-based range already used for the round gauges above, so a
+// "70% full" gauge and a trace sitting 70% up the chart mean the same thing.
+//
+// The baseline is a floor, not a ceiling: if a reading actually exceeds it
+// (an overload spike above the configured limit, a voltage sag/surge past
+// 180-250V) the scale expands to fit, with a little headroom, instead of
+// clipping the line flat at the top/bottom and hiding how far out of range
+// things really got.
+function getMetricRange(metric, values) {
   const limit = Math.max(number(meter.limit), 1);
-  if (metric === "voltage") return { min: 180, max: 250 };
-  if (metric === "current") return { min: 0, max: limit / 220 };
-  return { min: 0, max: limit };
+  const observedMax = values.length ? Math.max(...values) : 0;
+  const observedMin = values.length ? Math.min(...values) : 0;
+
+  if (metric === "voltage") {
+    const baseMin = 180, baseMax = 250;
+    return {
+      min: Math.min(baseMin, observedMin),
+      max: Math.max(baseMax, observedMax * 1.05),
+    };
+  }
+  if (metric === "current") {
+    return { min: 0, max: Math.max(limit / 220, observedMax * 1.1) };
+  }
+  return { min: 0, max: Math.max(limit, observedMax * 1.1) };
 }
 
 function buildPath(values, min, max) {
@@ -159,7 +176,7 @@ function buildPath(values, min, max) {
 function renderChart() {
   const dataMap = { power: powerValues, voltage: voltageValues, current: currentValues };
   const values = dataMap[chartState.metric] || [];
-  const { min, max } = getMetricRange(chartState.metric);
+  const { min, max } = getMetricRange(chartState.metric, values);
   const { line, area, lastX, lastY } = buildPath(values, min, max);
   const lineEl = $("telemetry-line");
   const areaEl = $("telemetry-area");
