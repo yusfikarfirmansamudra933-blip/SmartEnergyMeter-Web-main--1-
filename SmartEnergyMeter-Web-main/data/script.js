@@ -119,6 +119,45 @@ function setOtaProgress(percent) {
   if (percent !== null) fill.style.width = `${percent}%`;
 }
 
+// On a weak/high-latency WiFi link, the device can restart before its own
+// "OK" response makes it back to the browser — so a network error right
+// after 100% upload doesn't actually mean the flash write failed. Rather
+// than guess, poll /api/status until the device comes back and compare its
+// reported version against what it was running before the upload; that's
+// the one thing a same-image reflash and a real update actually let us
+// tell apart from here (requires bumping FIRMWARE_VERSION per release, see
+// README's OTA section).
+function pollForOtaResult(previousVersion, statusText) {
+  let attempts = 0;
+  const maxAttempts = 15;
+
+  const check = () => {
+    attempts++;
+    fetch("/api/status", { cache: "no-store" })
+      .then(response => (response.ok ? response.json() : Promise.reject()))
+      .then(data => {
+        if (data.version && data.version !== previousVersion) {
+          statusText.textContent = `Berhasil! Perangkat online lagi dengan versi ${data.version}.`;
+          showToast(`Firmware terpasang (v${data.version}).`);
+          setTimeout(() => location.reload(), 2000);
+        } else {
+          statusText.textContent = `Perangkat online lagi tapi versi tidak berubah (${data.version || "?"}) — mungkin firmware yang sama, atau update tidak masuk.`;
+          showToast("Perangkat online, tapi versi tidak berubah.", true);
+        }
+      })
+      .catch(() => {
+        if (attempts < maxAttempts) {
+          setTimeout(check, 2000);
+        } else {
+          statusText.textContent = "Perangkat belum merespons lagi. Tunggu sebentar lalu refresh manual.";
+          showToast("Perangkat belum online, coba refresh manual.", true);
+        }
+      });
+  };
+
+  setTimeout(check, 2000);
+}
+
 function uploadFirmware() {
   const input = $("firmwareFile");
   const button = $("uploadBtn");
@@ -130,18 +169,22 @@ function uploadFirmware() {
 
   const formData = new FormData();
   formData.append("firmware", file, file.name);
+  const previousVersion = meter.version;
 
   button.disabled = true;
   input.disabled = true;
   setOtaProgress(0);
   statusText.textContent = "Mengunggah…";
 
+  let uploadFinished = false;
   const xhr = new XMLHttpRequest();
   xhr.open("POST", "/update");
 
   xhr.upload.onprogress = event => {
     if (!event.lengthComputable) return;
-    setOtaProgress(Math.round((event.loaded / event.total) * 100));
+    const percent = Math.round((event.loaded / event.total) * 100);
+    setOtaProgress(percent);
+    if (percent >= 100) uploadFinished = true;
   };
 
   xhr.onload = () => {
@@ -159,8 +202,18 @@ function uploadFirmware() {
   };
 
   xhr.onerror = () => {
-    statusText.textContent = "Koneksi terputus sebelum unggahan selesai. Coba lagi.";
-    showToast("Upload firmware gagal, koneksi terputus.", true);
+    // The device replies then reboots right after — on a weak/slow WiFi
+    // link the connection can drop before that reply arrives even though
+    // the flash write itself already succeeded. If the upload itself made
+    // it to 100%, don't guess: poll the device and check its version.
+    if (uploadFinished) {
+      statusText.textContent = "Koneksi terputus setelah upload selesai. Memeriksa apakah perangkat sudah restart…";
+      showToast("Koneksi terputus, memeriksa status perangkat…");
+      pollForOtaResult(previousVersion, statusText);
+    } else {
+      statusText.textContent = "Koneksi terputus sebelum unggahan selesai. Coba lagi.";
+      showToast("Upload firmware gagal, koneksi terputus.", true);
+    }
     setOtaProgress(null);
     button.disabled = false;
     input.disabled = false;

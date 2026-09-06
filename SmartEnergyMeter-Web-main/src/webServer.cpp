@@ -130,9 +130,10 @@ void handleFirmwareUpload(
 
         Serial.printf("OTA update starting: %s\n", filename.c_str());
 
-        // Claims the OLED for the whole upload before Update.begin() even
-        // runs, so a Update.begin() failure can't race oledLoop() for the
-        // display — see oledOtaResult()'s doc comment.
+        // Only updates plain state (see oled.cpp) — safe to call from this
+        // handler's task. Claiming the OLED before Update.begin() runs means
+        // even a begin() failure is covered by the progress/result screens
+        // instead of the normal metric pages popping back up mid-update.
         oledOtaProgress(0);
 
         const size_t updateSize = request->contentLength() > 0 ? request->contentLength() : UPDATE_SIZE_UNKNOWN;
@@ -191,16 +192,32 @@ void handleFirmwareUpdateResult(AsyncWebServerRequest *request)
     const bool success = !Update.hasError();
     oledOtaResult(success);
 
+    // Update.errorString() is safe to call even when there's no error (it
+    // reads back "No Error" in that case) — surfacing it always means the
+    // real failure reason is visible from the HTTP response alone, without
+    // needing a USB/serial connection to read Update.printError().
+    String message = success ? "OK" : ("Update gagal: " + String(Update.errorString()));
     AsyncWebServerResponse *response = request->beginResponse(
         success ? 200 : 500,
         "text/plain",
-        success ? "OK" : "Update gagal, periksa file firmware dan coba lagi.");
+        message);
     response->addHeader("Connection", "close");
     request->send(response);
 
     if (success)
     {
-        delay(250);
+        // Two things need time before we pull the rug out from under them:
+        // oledLoop() (main task) needs a turn to pick up oledOtaResult()'s
+        // state and draw it, and — the flakier one in practice — the "OK"
+        // response above needs to actually clear the TCP send queue and
+        // reach the client over WiFi. On a weak/high-latency link (seen
+        // during testing: ~150-250ms RTT) the previous delay(250) restarted
+        // the device before the response went out, so curl saw a connection
+        // reset and reported "failed" even though the flash write and
+        // reboot both succeeded. This is a bandage, not a guarantee — with
+        // a bad enough link the client can still miss it — but it covers
+        // the conditions actually observed.
+        delay(1500);
         ESP.restart();
     }
 }

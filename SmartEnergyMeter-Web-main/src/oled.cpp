@@ -20,10 +20,19 @@ uint8_t page=0;
 
 unsigned long pageMillis=0;
 
-// While true, oledLoop() leaves the display alone — oledOtaProgress()/
-// oledOtaResult() are driving it directly instead, since they're called from
-// the OTA upload handler rather than the main loop's page-cycling timer.
+// oledOtaProgress()/oledOtaResult() are called from the OTA upload handler,
+// which runs on AsyncWebServer's own task — NOT the main loop() task. They
+// must only touch these plain variables and never the I2C display directly:
+// an earlier version drew straight from that handler and it reliably reset
+// the board mid-upload (SSD1306 I2C writes block for a few ms each, and
+// enough of them piling up on the network task starved the idle-task
+// watchdog on that core). oledLoop(), which runs on the main task, is the
+// only place allowed to actually call display.* — see the otaActive branch
+// at the top of oledLoop() below.
 bool otaActive=false;
+uint8_t otaPercent=0;
+bool otaResultPending=false;
+bool otaResultSuccess=false;
 
 void drawHeader(String title)
 {
@@ -160,24 +169,32 @@ display.print(WiFi.localIP());
 
 }
 
+// Fast, non-blocking: only sets state. Safe to call from the OTA upload
+// handler's task. The actual I2C drawing happens in oledLoop() instead.
 void oledOtaProgress(uint8_t percent)
 {
-
-static uint8_t lastPercent=255;
-
-if(!otaActive)
-{
-otaActive=true;
-lastPercent=255;
-}
 
 if(percent>100)
 percent=100;
 
-if(percent==lastPercent)
-return;
+otaActive=true;
+otaPercent=percent;
 
-lastPercent=percent;
+}
+
+// Same rule as oledOtaProgress(): just records state, drawn later from
+// oledLoop() on the main task.
+void oledOtaResult(bool success)
+{
+
+otaActive=true;
+otaResultPending=true;
+otaResultSuccess=success;
+
+}
+
+void drawOtaProgress(uint8_t percent)
+{
 
 display.clearDisplay();
 
@@ -205,7 +222,7 @@ display.display();
 
 }
 
-void oledOtaResult(bool success)
+void drawOtaResult(bool success)
 {
 
 display.clearDisplay();
@@ -224,19 +241,51 @@ display.print(success?"Merestart...":"Coba lagi ya");
 
 display.display();
 
-if(!success)
-{
-delay(1500);
-otaActive=false;
-}
-
 }
 
 void oledLoop()
 {
 
 if(otaActive)
+{
+
+static uint8_t lastDrawnPercent=255;
+static bool resultDrawn=false;
+
+if(otaResultPending)
+{
+if(!resultDrawn)
+{
+drawOtaResult(otaResultSuccess);
+resultDrawn=true;
+
+// Success: webServer.cpp restarts the device shortly after calling
+// oledOtaResult(), so this screen just needs to stay up till then —
+// nothing here resets otaActive, the reboot does that for free.
+// Failure: nobody else is going to clear this state, so give the
+// user a moment to read it, then hand the display back ourselves.
+if(!otaResultSuccess)
+{
+delay(1500);
+otaActive=false;
+otaResultPending=false;
+resultDrawn=false;
+lastDrawnPercent=255;
+}
+
+}
 return;
+}
+
+if(otaPercent!=lastDrawnPercent)
+{
+lastDrawnPercent=otaPercent;
+drawOtaProgress(otaPercent);
+}
+
+return;
+
+}
 
 if(
 millis()-pageMillis>3000)
