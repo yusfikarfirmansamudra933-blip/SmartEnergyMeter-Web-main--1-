@@ -10,6 +10,10 @@
 
 #define PROJECT_NAME "Smart Energy Meter"
 
+// Bumped manually on each release so /api/status and the OTA panel can show
+// which build is currently running (useful to confirm an update took effect).
+#define FIRMWARE_VERSION "1.1.0"
+
 /*==============================
         OLED
 ==============================*/

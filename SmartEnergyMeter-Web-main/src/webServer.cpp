@@ -4,10 +4,12 @@
 #include <ArduinoJson.h>
 #include <ESPAsyncWebServer.h>
 #include <LittleFS.h>
+#include <Update.h>
 #include <cstring>
 
 #include "config.h"
 #include "globals.h"
+#include "oled.h"
 #include "storage.h"
 #include "wifiManager.h"
 
@@ -34,6 +36,7 @@ String createStatusJson()
     document["wifi"] = wifiConnected();
     document["sensor"] = sensorOnline;
     document["ip"] = getIPAddress();
+    document["version"] = FIRMWARE_VERSION;
 
     String json;
     serializeJson(document, json);
@@ -99,6 +102,109 @@ void handleLoginBody(
     request->send(authorized ? 200 : 401, "text/plain", authorized ? "OK" : "FAIL");
 }
 
+// Set on the first chunk of an /update upload and read on every later chunk
+// and on the final response — safe as a single static because this device
+// only ever serves one firmware upload at a time.
+bool otaAuthorized = false;
+
+// Body handler for the multipart file upload: called repeatedly as chunks of
+// the .bin arrive, with `final` set on the very last one. Writes go straight
+// into the inactive OTA partition (app0/app1, already provided by the
+// board's default partition table) via the ESP32 core's Update API.
+void handleFirmwareUpload(
+    AsyncWebServerRequest *request,
+    String filename,
+    size_t index,
+    uint8_t *data,
+    size_t len,
+    bool final)
+{
+    if (index == 0)
+    {
+        const bool credentialsConfigured = strlen(WEB_USERNAME) > 0;
+        otaAuthorized = !credentialsConfigured || request->authenticate(WEB_USERNAME, WEB_PASSWORD);
+        if (!otaAuthorized)
+        {
+            return;
+        }
+
+        Serial.printf("OTA update starting: %s\n", filename.c_str());
+
+        // Claims the OLED for the whole upload before Update.begin() even
+        // runs, so a Update.begin() failure can't race oledLoop() for the
+        // display — see oledOtaResult()'s doc comment.
+        oledOtaProgress(0);
+
+        const size_t updateSize = request->contentLength() > 0 ? request->contentLength() : UPDATE_SIZE_UNKNOWN;
+        if (!Update.begin(updateSize, U_FLASH))
+        {
+            Update.printError(Serial);
+        }
+    }
+
+    if (!otaAuthorized)
+    {
+        return;
+    }
+
+    if (!Update.hasError() && Update.write(data, len) != len)
+    {
+        Update.printError(Serial);
+    }
+
+    // Tracks bytes received rather than bytes flashed, so the bar still
+    // reaches 100% (and the failure screen below can take over cleanly)
+    // even if Update.write() above failed partway through.
+    const size_t contentLength = request->contentLength();
+    if (contentLength > 0)
+    {
+        uint32_t percent = (uint32_t)(((index + len) * 100UL) / contentLength);
+        if (percent > 100)
+        {
+            percent = 100;
+        }
+        oledOtaProgress((uint8_t)percent);
+    }
+
+    if (final)
+    {
+        if (!Update.hasError() && Update.end(true))
+        {
+            Serial.printf("OTA update complete: %u bytes\n", index + len);
+        }
+        else
+        {
+            Update.printError(Serial);
+        }
+    }
+}
+
+// Response handler for /update, runs once the upload above has finished.
+void handleFirmwareUpdateResult(AsyncWebServerRequest *request)
+{
+    if (!otaAuthorized)
+    {
+        request->requestAuthentication();
+        return;
+    }
+
+    const bool success = !Update.hasError();
+    oledOtaResult(success);
+
+    AsyncWebServerResponse *response = request->beginResponse(
+        success ? 200 : 500,
+        "text/plain",
+        success ? "OK" : "Update gagal, periksa file firmware dan coba lagi.");
+    response->addHeader("Connection", "close");
+    request->send(response);
+
+    if (success)
+    {
+        delay(250);
+        ESP.restart();
+    }
+}
+
 void registerApiRoutes()
 {
     server.on("/api/status", HTTP_GET, sendStatus);
@@ -128,6 +234,12 @@ void registerApiRoutes()
         notifyClients();
         request->send(200, "text/plain", "OK");
     });
+
+    server.on(
+        "/update",
+        HTTP_POST,
+        handleFirmwareUpdateResult,
+        handleFirmwareUpload);
 
     server.on("/restart", HTTP_GET, [](AsyncWebServerRequest *request) {
         request->send(200, "text/plain", "Restarting");

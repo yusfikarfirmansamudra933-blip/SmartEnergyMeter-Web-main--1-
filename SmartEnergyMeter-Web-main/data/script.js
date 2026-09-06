@@ -46,6 +46,7 @@ function updateDashboard() {
   setText("va", format(meter.va, 0)); setText("var", format(meter.var, 0));
   setText("pzemStatus", meter.sensor ? "Online" : "Tidak terdeteksi");
   setText("connectionText", meter.wifi ? "Terhubung" : "Wi-Fi terputus");
+  if (meter.version) setText("fwVersion", meter.version);
 }
 
 function applyStatus(data, appendChart = true) {
@@ -105,6 +106,67 @@ async function restartESP() {
 async function factoryReset() {
   if (!confirm("Factory reset mengembalikan pengaturan perangkat ke nilai awal. Lanjutkan?")) return;
   try { await sendRequest("/factoryReset", "Factory reset selesai."); await refreshStatus(false); } catch { showToast("Factory reset gagal.", true); }
+}
+
+// Firmware upload uses XMLHttpRequest (not fetch) specifically because only
+// XHR exposes an "upload.progress" event — needed for the progress bar on a
+// multi-hundred-KB .bin file over a slow ESP32 AP/LAN link.
+function setOtaProgress(percent) {
+  const track = $("otaProgressTrack");
+  const fill = $("otaProgressFill");
+  if (!track || !fill) return;
+  track.hidden = percent === null;
+  if (percent !== null) fill.style.width = `${percent}%`;
+}
+
+function uploadFirmware() {
+  const input = $("firmwareFile");
+  const button = $("uploadBtn");
+  const statusText = $("otaStatusText");
+  const file = input && input.files && input.files[0];
+
+  if (!file) { showToast("Pilih file firmware (.bin) dulu.", true); return; }
+  if (!confirm(`Pasang firmware "${file.name}" (${(file.size / 1024).toFixed(0)} KB)? Perangkat akan restart setelah selesai.`)) return;
+
+  const formData = new FormData();
+  formData.append("firmware", file, file.name);
+
+  button.disabled = true;
+  input.disabled = true;
+  setOtaProgress(0);
+  statusText.textContent = "Mengunggah…";
+
+  const xhr = new XMLHttpRequest();
+  xhr.open("POST", "/update");
+
+  xhr.upload.onprogress = event => {
+    if (!event.lengthComputable) return;
+    setOtaProgress(Math.round((event.loaded / event.total) * 100));
+  };
+
+  xhr.onload = () => {
+    if (xhr.status === 200) {
+      statusText.textContent = "Berhasil! Perangkat sedang restart…";
+      showToast("Firmware terpasang, perangkat restart.");
+      setTimeout(() => location.reload(), 6000);
+    } else {
+      statusText.textContent = xhr.responseText || "Update gagal.";
+      showToast("Update firmware gagal.", true);
+      button.disabled = false;
+      input.disabled = false;
+      setOtaProgress(null);
+    }
+  };
+
+  xhr.onerror = () => {
+    statusText.textContent = "Koneksi terputus sebelum unggahan selesai. Coba lagi.";
+    showToast("Upload firmware gagal, koneksi terputus.", true);
+    setOtaProgress(null);
+    button.disabled = false;
+    input.disabled = false;
+  };
+
+  xhr.send(formData);
 }
 
 function updateClock() { setText("clock", new Date().toLocaleTimeString()); }

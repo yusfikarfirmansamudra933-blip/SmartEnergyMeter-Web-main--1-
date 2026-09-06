@@ -42,6 +42,7 @@
       <div class="status-row"><span>Sensor PZEM</span><strong id="pzemStatus">Memeriksa</strong></div>
       <div class="status-row"><span>Koneksi dashboard</span><strong id="connectionText">Menghubungkan</strong></div>
       <div class="status-row"><span>Pembaruan data</span><strong id="fps">0 Hz</strong></div>
+      <div class="status-row"><span>Versi firmware</span><strong id="fwVersion">-</strong></div>
     </section>
 
     <section class="panel chart-panel">
@@ -56,6 +57,19 @@
         <button id="restartBtn" class="button button-secondary" onclick="restartESP()">Restart perangkat</button>
         <button id="factoryBtn" class="button button-danger" onclick="factoryReset()">Factory reset</button>
       </div>
+    </section>
+
+    <section class="panel ota-panel">
+      <div><p class="eyebrow">FIRMWARE</p><h2>Perbarui firmware</h2></div>
+      <p class="muted">Unggah file <code>firmware.bin</code> hasil <code>pio run -t buildfs</code>/<code>pio run</code>. Perangkat akan restart otomatis setelah berhasil.</p>
+      <div class="ota-controls">
+        <input type="file" id="firmwareFile" accept=".bin">
+        <button id="uploadBtn" class="button button-primary" onclick="uploadFirmware()">Unggah &amp; pasang</button>
+      </div>
+      <div id="otaProgressTrack" class="progress-track" hidden>
+        <div id="otaProgressFill" class="progress-fill"></div>
+      </div>
+      <p id="otaStatusText" class="muted"></p>
     </section>
 
     <a class="bill-link" href="bill.html"><span>Tagihan listrik</span><strong>Lihat estimasi bulanan →</strong></a>
