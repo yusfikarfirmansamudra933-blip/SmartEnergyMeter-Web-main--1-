@@ -12,7 +12,7 @@
 
 // Bumped manually on each release so /api/status and the OTA panel can show
 // which build is currently running (useful to confirm an update took effect).
-#define FIRMWARE_VERSION "1.2.1"
+#define FIRMWARE_VERSION "1.3.0"
 
 /*==============================
         OLED
@@ -39,7 +39,7 @@
 
 #define SENSOR_INTERVAL 500
 
-#define OLED_INTERVAL 3000
+#define OLED_INTERVAL 15000
 
 #define GRAPH_INTERVAL 1000
 

@@ -4,6 +4,7 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 
+#include "config.h"
 #include "globals.h"
 #include "wifiManager.h"
 
@@ -308,7 +309,7 @@ return;
 }
 
 if(
-millis()-pageMillis>3000)
+millis()-pageMillis>OLED_INTERVAL)
 {
 
 pageMillis=millis();
