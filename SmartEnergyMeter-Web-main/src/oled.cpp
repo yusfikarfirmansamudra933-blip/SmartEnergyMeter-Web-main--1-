@@ -265,6 +265,31 @@ display.display();
 
 }
 
+// Same reasoning as drawPairingScreen() below — no drawHeader(), every
+// pixel goes to the AP name and IP the user actually needs to read.
+void oledShowProvisioning(const String &apName)
+{
+
+display.clearDisplay();
+
+display.setTextSize(1);
+
+display.setCursor(0,0);
+
+display.print("Connect ke WiFi:");
+
+display.setCursor(0,10);
+
+display.print(apName);
+
+display.setCursor(0,20);
+
+display.print("Buka 192.168.4.1");
+
+display.display();
+
+}
+
 // Skips drawHeader()'s title bar — on a 128x32 screen every pixel of
 // height matters more here than looking consistent with the other
 // screens, since the code has to actually be readable at a glance.

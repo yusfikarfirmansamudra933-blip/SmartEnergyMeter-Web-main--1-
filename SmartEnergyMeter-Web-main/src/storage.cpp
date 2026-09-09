@@ -42,15 +42,17 @@ void saveLimit(float value)
 
 void resetConfig()
 {
+    // Also wipes any saved WiFi credentials (see saveWifiCredentials()) —
+    // intentional: factory reset means "forget everything", so the device
+    // re-enters both the WiFi provisioning portal and pairing, same state
+    // a genuinely fresh unit would be in before it ever ships.
     preferences.clear();
 
     powerLimit = DEFAULT_POWER_LIMIT;
 
     preferences.putFloat("limit", powerLimit);
 
-    // Factory reset is how a device re-enters "needs pairing" — same
-    // moment a genuinely fresh unit would be in before it ever ships. See
-    // isPaired()'s doc comment for why the default (key absent) is true.
+    // See isPaired()'s doc comment for why the default (key absent) is true.
     preferences.putBool("paired", false);
 }
 
@@ -77,4 +79,25 @@ bool isPaired()
 void markPaired()
 {
     preferences.putBool("paired", true);
+}
+
+bool hasStoredWifiCredentials()
+{
+    return preferences.getString("wifiSsid", "").length() > 0;
+}
+
+String getStoredWifiSsid()
+{
+    return preferences.getString("wifiSsid", "");
+}
+
+String getStoredWifiPassword()
+{
+    return preferences.getString("wifiPass", "");
+}
+
+void saveWifiCredentials(const String &ssid, const String &password)
+{
+    preferences.putString("wifiSsid", ssid);
+    preferences.putString("wifiPass", password);
 }

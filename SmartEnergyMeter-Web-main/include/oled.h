@@ -1,6 +1,7 @@
 #ifndef OLED_H
 #define OLED_H
 
+#include <Arduino.h>
 #include <cstdint>
 
 void oledBegin();
@@ -24,5 +25,10 @@ void oledOtaResult(bool success);
 // reachable (the post-OTA rollback check runs synchronously there, so
 // there's nothing else contending for the display yet).
 void oledOtaVerifyScreen(const char *status);
+
+// Draws directly (see oledOtaVerifyScreen's doc comment) — only ever
+// called from wifiProvision.cpp before its captive-portal loop starts,
+// which is also before oledLoop() is ever reachable.
+void oledShowProvisioning(const String &apName);
 
 #endif

@@ -76,7 +76,15 @@ Supaya beberapa unit fisik bisa dipakai tanpa reflash/edit config satu-satu per 
   4. Device yang sedang subscribe ke topic itu menerima pesannya, menandai dirinya "sudah dipasangkan" (tersimpan di NVS, tahan reboot), dan OLED kembali ke halaman metrik normal.
   5. Kalau firmware ini di-OTA ke device yang **sudah** pernah dipakai sebelum fitur ini ada, dia otomatis dianggap "sudah dipasangkan" (tidak tiba-tiba minta setup ulang) — status "belum dipasangkan" cuma didapat lewat factory reset atau firmware yang benar-benar baru pertama kali boot.
 
-WiFi masih perlu diisi manual di `config.local.h` sebelum upload pertama (captive portal WiFi belum ada) — pairing di sini baru menyelesaikan bagian "device ini milik akun siapa", bukan "device ini connect WiFi mana".
+- **Setup WiFi tanpa isi apa pun di config.local.h** — kalau device boot dan tidak punya kredensial WiFi sama sekali (bukan yang tersimpan dari portal sebelumnya, bukan juga `WIFI_SSID` yang di-compile), dia otomatis jadi Access Point sendiri bernama `SmartMeter-<deviceId>`:
+  1. OLED menampilkan nama AP itu dan alamat `192.168.4.1`.
+  2. Connect HP/laptop ke WiFi `SmartMeter-<deviceId>` itu (tanpa password) — biasanya langsung muncul notifikasi "Sign in to network" otomatis membuka halaman setup-nya; kalau tidak, buka `http://192.168.4.1` manual.
+  3. Pilih WiFi rumah dari daftar (atau isi manual kalau SSID-nya hidden), isi password, klik **Simpan & Sambungkan**.
+  4. Device simpan kredensial itu ke NVS (bukan ke file, jadi tidak butuh reflash) dan restart, lanjut connect ke WiFi itu seperti biasa, lalu lanjut ke layar Pairing di atas.
+  
+  Ini **backward compatible** — device yang firmware-nya masih punya `WIFI_SSID` terisi di `config.local.h` (cara lama) tetap jalan seperti biasa, tidak akan pernah masuk mode Access Point ini. Mode ini hanya aktif kalau *benar-benar* tidak ada kredensial dari sumber mana pun — kondisi persis yang dialami unit baru yang `config.local.h`-nya sengaja dikosongkan bagian WiFi-nya, atau device manapun setelah factory reset (lihat catatan keamanan soal AP terbuka tanpa password di bagian "Catatan keamanan").
+
+Ringkasnya, untuk unit ke-2 dan seterusnya: flash `firmware.bin` yang **sama persis** (tanpa `DEVICE_ID`/`WIFI_SSID` di `config.local.h`-nya, cukup isi `MQTT_HOST` dkk yang memang sama untuk semua unit) → nyalakan → sambungkan WiFi lewat portal → pairing lewat kode di OLED. Tidak ada langkah reflash atau edit config per unit.
 
 ## Menyiapkan broker MQTT (EMQX Cloud)
 
@@ -135,6 +143,7 @@ Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-de
 - Kredensial MQTT di dashboard cloud (`smartenergymeterweb`) **sengaja read-only** karena kodenya publik dan terlihat siapa saja lewat "View Source" — jangan pernah pakai kredensial full-access di sana.
 - Kredensial bot (`smartenergymeterbot`, `TELEGRAM_BOT_TOKEN`) hanya hidup sebagai environment variable server-side di Vercel, tidak pernah masuk ke kode yang di-deploy ke browser.
 - Dashboard lokal (`data/`) saat ini **belum** punya autentikasi HTTP aktif di sebagian besar endpoint (`/restart`, `/factoryReset`, `/setLimit`) meski field `WEB_USERNAME`/`WEB_PASSWORD` sudah ada di config — siapa pun di jaringan WiFi yang sama bisa akses. Pengecualiannya `/update` (OTA firmware): endpoint ini **menegakkan** HTTP Basic Auth begitu `WEB_USERNAME`/`WEB_PASSWORD` diisi, karena flash firmware sembarangan jauh lebih berbahaya daripada restart/reset.
+- AP setup WiFi (`SmartMeter-<deviceId>`, lihat bagian "Multi-device" di atas) **sengaja tanpa password**, sama seperti kebanyakan perangkat IoT konsumer (Sonoff, Tuya, dst) — password WiFi rumah yang diisi lewat portal-nya juga terkirim lewat HTTP biasa (bukan HTTPS) ke `192.168.4.1`, bukan lewat internet. AP ini cuma aktif sebentar (sampai kredensial tersimpan lalu device restart), dan jangkauannya terbatas sinyal WiFi lokal.
 
 ## Struktur
 
