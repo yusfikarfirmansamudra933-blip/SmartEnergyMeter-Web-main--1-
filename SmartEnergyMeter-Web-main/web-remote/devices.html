@@ -12,6 +12,7 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface": "#0b1326", "on-surface-variant": "#bbcabf", "surface-slate": "#1E293B", "on-primary-fixed": "#002113", "on-secondary-fixed-variant": "#004e5c", "tertiary": "#ffb95f", "outline": "#86948a", "primary": "#4edea3", "surface-container-high": "#222a3d", "on-tertiary-fixed": "#2a1700", "on-error-container": "#ffdad6", "background": "#0b1326", "tertiary-container": "#e29100", "secondary-fixed-dim": "#4cd7f6", "text-dim": "#94A3B8", "inverse-surface": "#dae2fd", "on-tertiary-container": "#523200", "surface-charcoal": "#0B1120", "on-secondary-container": "#00424e", "tertiary-fixed-dim": "#ffb95f", "danger-rose": "#F43F5E", "inverse-primary": "#006c49", "on-primary-container": "#00422b", "surface-bright": "#31394d", "inverse-on-surface": "#283044", "secondary-fixed": "#acedff", "primary-fixed-dim": "#4edea3", "on-surface": "#dae2fd", "surface-container-lowest": "#060e20", "on-primary": "#003824", "surface-container": "#171f33", "secondary": "#4cd7f6", "surface-dim": "#0b1326", "surface-container-low": "#131b2e", "surface-variant": "#2d3449", "error": "#ffb4ab", "secondary-container": "#03b5d3", "outline-variant": "#3c4a42", "on-secondary-fixed": "#001f26", "primary-container": "#10b981", "error-container": "#93000a", "on-secondary": "#003640", "tertiary-fixed": "#ffddb8", "surface-container-highest": "#2d3449", "on-error": "#690005", "on-primary-fixed-variant": "#005236", "surface-tint": "#4edea3", "primary-fixed": "#6ffbbe", "on-background": "#dae2fd", "on-tertiary-fixed-variant": "#653e00", "on-tertiary": "#472a00" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter-xs": "0.25rem", "gutter-sm": "0.5rem", "card-pad": "1.25rem", "gutter-lg": "1.5rem", "gutter-md": "1rem", "gutter-xl": "2rem", "panel-gap": "1rem" }, "fontFamily": { "headline-metric": ["Space Grotesk", "sans-serif"], "metric-unit": ["JetBrains Mono", "monospace"], "label-telemetry": ["JetBrains Mono", "monospace"], "body-md": ["Space Grotesk", "sans-serif"], "title-md": ["Space Grotesk", "sans-serif"], "display-lg": ["Space Grotesk", "sans-serif"], "body-sm": ["Space Grotesk", "sans-serif"], "headline-metric-mobile": ["Space Grotesk", "sans-serif"], "display-lg-mobile": ["Space Grotesk", "sans-serif"] }, "fontSize": { "headline-metric": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "metric-unit": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "label-telemetry": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "400" }], "title-md": ["18px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600" }], "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400" }], "headline-metric-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }] } } } };</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 </head>
 <body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary selection:text-on-primary">
 <main class="flex flex-col relative w-full pt-safe pb-24 bg-surface min-h-screen" hidden id="page">
@@ -33,15 +34,15 @@
 <div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-lg flex flex-col space-y-gutter-sm">
 <div class="flex flex-col">
 <span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">TAMBAH DEVICE</span>
-<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Kode pairing otomatis dari OLED belum aktif (menyusul di firmware) — untuk sekarang, isi manual sesuai ID yang dipakai perangkat.</p>
+<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Nyalakan device baru (atau yang sudah di-factory-reset) — layar OLED-nya menampilkan kode "Pairing". Masukkan kode itu di bawah.</p>
 </div>
 <label class="flex flex-col space-y-gutter-xs">
 <span class="font-label-telemetry text-label-telemetry text-on-surface-variant uppercase tracking-wider">Nama device</span>
 <input class="w-full rounded-lg bg-surface-charcoal border border-surface-container-highest px-3 py-2.5 text-on-surface font-body-md text-body-md outline-none focus:border-primary transition-colors" id="newDeviceName" placeholder="misal: Meter Rumah"/>
 </label>
 <label class="flex flex-col space-y-gutter-xs">
-<span class="font-label-telemetry text-label-telemetry text-on-surface-variant uppercase tracking-wider">Device ID</span>
-<input class="w-full rounded-lg bg-surface-charcoal border border-surface-container-highest px-3 py-2.5 text-on-surface font-metric-unit text-metric-unit outline-none focus:border-primary transition-colors" id="newDeviceId" placeholder="misal: meter-rumah-01"/>
+<span class="font-label-telemetry text-label-telemetry text-on-surface-variant uppercase tracking-wider">Kode dari OLED</span>
+<input class="w-full rounded-lg bg-surface-charcoal border border-surface-container-highest px-3 py-2.5 text-on-surface font-metric-unit text-metric-unit outline-none focus:border-primary transition-colors" id="newDeviceId" placeholder="misal: a1b2c3"/>
 </label>
 <button class="w-full rounded-lg bg-primary text-on-primary font-body-md text-body-md font-semibold py-2.5 transition-all active:scale-[0.98] disabled:opacity-50 disabled:active:scale-100" id="addDeviceBtn" type="button">Tambah</button>
 <p class="font-body-sm text-body-sm hidden" id="formStatus"></p>
@@ -112,10 +113,35 @@ async function loadDevices() {
   data.forEach((device) => deviceListEl.appendChild(deviceCard(device)));
 }
 
+// Same read-mostly credential as script.js/bill.js, with one narrow
+// exception: this specific topic is allow-listed for publish on the EMQX
+// ACL (see README's "Menyiapkan broker MQTT" section) — everything else
+// stays deny. Connects fresh per call rather than staying open, since this
+// only fires when someone clicks "Tambah".
+function publishClaimed(id) {
+  return new Promise((resolve, reject) => {
+    const client = mqtt.connect("wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt", {
+      username: "smartenergymeterweb",
+      password: "sMch!JtGn5gpYD4",
+      clientId: "claim-" + Math.random().toString(16).slice(2),
+      connectTimeout: 8000,
+    });
+    const timer = setTimeout(() => { client.end(true); reject(new Error("Timeout menghubungi broker")); }, 8000);
+    client.on("connect", () => {
+      client.publish(`smartmeter/${id}/claimed`, "1", { retain: true, qos: 1 }, (err) => {
+        clearTimeout(timer);
+        client.end(true);
+        if (err) reject(err); else resolve();
+      });
+    });
+    client.on("error", (err) => { clearTimeout(timer); client.end(true); reject(err); });
+  });
+}
+
 async function addDevice() {
   const name = document.getElementById("newDeviceName").value.trim();
-  const id = document.getElementById("newDeviceId").value.trim();
-  if (!name || !id) { setFormStatus("Isi nama dan device ID dulu.", true); return; }
+  const id = document.getElementById("newDeviceId").value.trim().toLowerCase();
+  if (!name || !id) { setFormStatus("Isi nama dan kode dari OLED dulu.", true); return; }
 
   const { data: { session } } = await supabaseClient.auth.getSession();
   if (!session) { location.href = "login.html"; return; }
@@ -129,9 +155,21 @@ async function addDevice() {
   });
 
   if (error) { setFormStatus(`Gagal: ${error.message}`, true); return; }
+
+  setFormStatus("Device tersimpan, mengaktifkan pairing...", false);
+  try {
+    await publishClaimed(id);
+  } catch (err) {
+    // Device row exists either way — the pairing signal can be retried by
+    // deleting and re-adding, so this isn't fatal, just worth surfacing.
+    setFormStatus(`Device tersimpan, tapi sinyal pairing gagal terkirim: ${err.message}. Coba hapus lalu tambah ulang.`, true);
+    loadDevices();
+    return;
+  }
+
   document.getElementById("newDeviceName").value = "";
   document.getElementById("newDeviceId").value = "";
-  setFormStatus("Device ditambahkan.", false);
+  setFormStatus("Device ditambahkan dan berhasil di-pairing.", false);
   loadDevices();
 }
 

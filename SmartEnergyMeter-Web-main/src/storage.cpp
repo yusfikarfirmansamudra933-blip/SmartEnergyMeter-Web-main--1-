@@ -47,6 +47,11 @@ void resetConfig()
     powerLimit = DEFAULT_POWER_LIMIT;
 
     preferences.putFloat("limit", powerLimit);
+
+    // Factory reset is how a device re-enters "needs pairing" — same
+    // moment a genuinely fresh unit would be in before it ever ships. See
+    // isPaired()'s doc comment for why the default (key absent) is true.
+    preferences.putBool("paired", false);
 }
 
 bool isOtaPendingVerify()
@@ -62,4 +67,14 @@ void markOtaPendingVerify()
 void clearOtaPendingVerify()
 {
     preferences.putBool("otaPending", false);
+}
+
+bool isPaired()
+{
+    return preferences.getBool("paired", true);
+}
+
+void markPaired()
+{
+    preferences.putBool("paired", true);
 }

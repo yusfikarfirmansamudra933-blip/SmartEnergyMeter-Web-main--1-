@@ -38,6 +38,7 @@ String topicStatus;
 String topicLimit;
 String topicRestart;
 String topicReset;
+String topicClaimed;
 String mqttClientId;
 bool topicsInitialized = false;
 
@@ -54,6 +55,9 @@ void initTopicsOnce()
     topicLimit = prefix + "cmd/limit";
     topicRestart = prefix + "cmd/restart";
     topicReset = prefix + "cmd/reset";
+    // Published (retained) by web-remote/devices.html once someone adds
+    // this device on the dashboard — see isPaired()'s doc comment.
+    topicClaimed = prefix + "claimed";
     // Was a hardcoded "ESP32SmartMeter" — fine for one device, but the
     // broker drops whichever connection loses a client-id collision, so
     // two physical units sharing that string would fight each other for
@@ -135,6 +139,17 @@ void callback(char* topic, byte* payload, unsigned int length)
 
         ESP.restart();
     }
+
+    //======================================================
+    // PAIRING CLAIMED (see isPaired() in storage.h)
+    //======================================================
+
+    else if (String(topic) == topicClaimed)
+    {
+        Serial.println("===== DEVICE PAIRED =====");
+
+        markPaired();
+    }
 }
 
 //==========================================================
@@ -191,6 +206,12 @@ void mqttReconnect()
         mqtt.subscribe(topicLimit.c_str());
         mqtt.subscribe(topicRestart.c_str());
         mqtt.subscribe(topicReset.c_str());
+        // Subscribed unconditionally (not just while unpaired) so a
+        // re-claim after a factory reset is picked up the same way — and
+        // because the retained message (if any) is redelivered on every
+        // fresh subscribe, so this also self-heals if markPaired() ever
+        // failed to persist for some reason.
+        mqtt.subscribe(topicClaimed.c_str());
     }
 }
 

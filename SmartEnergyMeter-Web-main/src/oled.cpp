@@ -6,6 +6,7 @@
 
 #include "config.h"
 #include "globals.h"
+#include "storage.h"
 #include "wifiManager.h"
 
 #define SCREEN_WIDTH 128
@@ -264,6 +265,30 @@ display.display();
 
 }
 
+// Skips drawHeader()'s title bar — on a 128x32 screen every pixel of
+// height matters more here than looking consistent with the other
+// screens, since the code has to actually be readable at a glance.
+void drawPairingScreen()
+{
+
+display.clearDisplay();
+
+display.setTextSize(1);
+
+display.setCursor(0,0);
+
+display.print("Pairing - masukkan:");
+
+display.setTextSize(2);
+
+display.setCursor(4,13);
+
+display.print(getDeviceId());
+
+display.display();
+
+}
+
 void oledLoop()
 {
 
@@ -302,6 +327,21 @@ if(otaPercent!=lastDrawnPercent)
 {
 lastDrawnPercent=otaPercent;
 drawOtaProgress(otaPercent);
+}
+
+return;
+
+}
+
+if(!isPaired())
+{
+
+static bool pairingDrawn=false;
+
+if(!pairingDrawn)
+{
+drawPairingScreen();
+pairingDrawn=true;
 }
 
 return;

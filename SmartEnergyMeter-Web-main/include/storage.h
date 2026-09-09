@@ -21,4 +21,14 @@ void markOtaPendingVerify();
 
 void clearOtaPendingVerify();
 
+// Whether this device has been claimed on the web dashboard (see
+// web-remote/devices.html) yet. Defaults to true when the key has never
+// been set, so a device that predates this feature isn't suddenly dropped
+// into a pairing screen it was never meant to see — resetConfig() (factory
+// reset) is what actually puts a device into "needs pairing" mode, same as
+// preparing a genuinely new unit before it ships.
+bool isPaired();
+
+void markPaired();
+
 #endif

@@ -63,6 +63,21 @@ Firmware baru punya satu kesempatan untuk membuktikan dirinya bisa konek WiFi se
 
 Pengecekan ini cuma jalan sekali per OTA (bukan tiap boot), jadi tidak menambah waktu boot untuk restart/power-cycle biasa. Kalau tidak ada firmware valid di partisi satunya untuk di-rollback (misal baru sekali pernah di-flash), perangkat tetap lanjut boot dengan firmware yang ada — tidak ada tempat lain untuk kembali.
 
+## Multi-device: akun web & pairing dari OLED
+
+Supaya beberapa unit fisik bisa dipakai tanpa reflash/edit config satu-satu per device, ada dua bagian yang saling melengkapi:
+
+- **Akun & daftar device** (`web-remote/login.html`, `devices.html`) — login pakai magic link email (Supabase Auth), tiap user bisa punya beberapa device, datanya (device, billing, dst) disimpan di Postgres (Supabase) dengan Row Level Security supaya hanya kelihatan oleh pemiliknya. Skemanya di `web-remote/supabase/schema.sql`.
+- **Topic MQTT per-device** — lihat bagian "Topic MQTT" di bawah; tiap device generate id sendiri dari MAC address (atau `DEVICE_ID` override di `config.local.h`).
+- **Pairing dari OLED** — device baru (atau setelah factory reset) belum "dipasangkan" ke akun mana pun:
+  1. OLED menampilkan layar "Pairing" dengan kode (id device-nya, misal `a1b2c3`), menggantikan halaman metrik biasa, sampai proses pairing selesai.
+  2. Di `devices.html`, isi nama + kode itu, klik **Tambah**.
+  3. Browser publish pesan retained ke `smartmeter/<kode>/claimed` (pakai kredensial baca publik yang sama dengan dashboard, dengan satu pengecualian ACL khusus topic ini — lihat tabel ACL di bawah).
+  4. Device yang sedang subscribe ke topic itu menerima pesannya, menandai dirinya "sudah dipasangkan" (tersimpan di NVS, tahan reboot), dan OLED kembali ke halaman metrik normal.
+  5. Kalau firmware ini di-OTA ke device yang **sudah** pernah dipakai sebelum fitur ini ada, dia otomatis dianggap "sudah dipasangkan" (tidak tiba-tiba minta setup ulang) — status "belum dipasangkan" cuma didapat lewat factory reset atau firmware yang benar-benar baru pertama kali boot.
+
+WiFi masih perlu diisi manual di `config.local.h` sebelum upload pertama (captive portal WiFi belum ada) — pairing di sini baru menyelesaikan bagian "device ini milik akun siapa", bukan "device ini connect WiFi mana".
+
 ## Menyiapkan broker MQTT (EMQX Cloud)
 
 Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www.emqx.com/en/cloud) (tier Serverless gratis). Buat 3 user Authentication dengan Authorization (ACL) berbeda hak akses:
@@ -70,7 +85,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 | User | Dipakai oleh | Hak akses |
 |---|---|---|
 | (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
-| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/billing/#`. **Publish harus di-deny** (topic `#`) |
+| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`, `devices.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/billing/#`. Publish **hanya** `smartmeter/+/claimed` (dipakai `devices.html` saat pairing) — publish topic lain harus tetap di-deny (`#`). Rule allow untuk `claimed` harus dievaluasi **sebelum** rule deny `#` (urutan rule penting di EMQX) |
 | `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid`. Publish `smartmeter/+/cmd/limit`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid` |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
@@ -88,6 +103,7 @@ Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-de
 | `smartmeter/<deviceId>/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
 | `smartmeter/<deviceId>/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
 | `smartmeter/<deviceId>/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
+| `smartmeter/<deviceId>/claimed` | `devices.html` → ESP32 | Publish apa saja (retained) untuk menandai device sudah dipasangkan ke akun — lihat bagian "Multi-device" di atas |
 | `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained — **global, bukan per-device** |
 | `smartmeter/<deviceId>/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload) untuk device ini, retained |
 | `smartmeter/<deviceId>/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan device ini terkirim (dedup), retained |
