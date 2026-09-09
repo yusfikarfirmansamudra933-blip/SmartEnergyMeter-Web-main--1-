@@ -14,18 +14,27 @@ const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
 const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
+// Hardcoded to the one physical device for now — matches DEVICE_ID in the
+// firmware's config.local.h and the "meter-01" row in web-remote/devices.html.
+// Everything below except chatid is a per-device concern (each device has
+// its own billing history, alert state, reminder), so it's namespaced under
+// smartmeter/<id>/... same as the firmware's own topics. chatid stays
+// global/unprefixed — which chat to notify is a per-user concern, not a
+// per-device one (proper per-user linking is the still-pending Telegram
+// part of Phase 1).
+const DEVICE_ID = "meter-01";
+const TOPIC_DATA = `smartmeter/${DEVICE_ID}/data`;
+const TOPIC_STATUS = `smartmeter/${DEVICE_ID}/status`;
 const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
-const TOPIC_ALERT_STATE = "smartmeter/telegram/alert_state";
-const TOPIC_SUMMARY_STATE = "smartmeter/telegram/summary_state";
-const TOPIC_REMINDER = "smartmeter/telegram/reminder";
-const TOPIC_REMINDER_STATE = "smartmeter/telegram/reminder_state";
+const TOPIC_ALERT_STATE = `smartmeter/${DEVICE_ID}/telegram/alert_state`;
+const TOPIC_SUMMARY_STATE = `smartmeter/${DEVICE_ID}/telegram/summary_state`;
+const TOPIC_REMINDER = `smartmeter/${DEVICE_ID}/telegram/reminder`;
+const TOPIC_REMINDER_STATE = `smartmeter/${DEVICE_ID}/telegram/reminder_state`;
 const REMINDER_HOUR_WIB = 8;
-const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
-const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
-const TOPIC_BILLING_DAILY_START = "smartmeter/billing/daily_start";
-const TOPIC_BILLING_WEEKLY_START = "smartmeter/billing/weekly_start";
+const TOPIC_BILLING_DAILY = `smartmeter/${DEVICE_ID}/billing/daily`;
+const TOPIC_BILLING_WEEKLY = `smartmeter/${DEVICE_ID}/billing/weekly`;
+const TOPIC_BILLING_DAILY_START = `smartmeter/${DEVICE_ID}/billing/daily_start`;
+const TOPIC_BILLING_WEEKLY_START = `smartmeter/${DEVICE_ID}/billing/weekly_start`;
 
 // No per-user rate setting exists (no UI for it) — this is the single
 // source of truth now, matching the old client-side default in bill.js.

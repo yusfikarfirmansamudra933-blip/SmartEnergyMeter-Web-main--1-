@@ -37,6 +37,7 @@ String createStatusJson()
     document["sensor"] = sensorOnline;
     document["ip"] = getIPAddress();
     document["version"] = FIRMWARE_VERSION;
+    document["deviceId"] = getDeviceId();
 
     String json;
     serializeJson(document, json);

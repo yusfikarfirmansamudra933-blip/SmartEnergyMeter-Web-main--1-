@@ -9,15 +9,18 @@ const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
 const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
-const TOPIC_LIMIT_CMD = "smartmeter/cmd/limit";
+// See api/monitor.js's DEVICE_ID comment — same stopgap single hardcoded
+// device, same reasoning for which topics are namespaced vs. left global.
+const DEVICE_ID = "meter-01";
+const TOPIC_DATA = `smartmeter/${DEVICE_ID}/data`;
+const TOPIC_STATUS = `smartmeter/${DEVICE_ID}/status`;
+const TOPIC_LIMIT_CMD = `smartmeter/${DEVICE_ID}/cmd/limit`;
 const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
-const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
+const TOPIC_BILLING_DAILY = `smartmeter/${DEVICE_ID}/billing/daily`;
 // Reminder is user-set (not auto-computed like the daily/weekly summary),
 // so it lives under telegram/# rather than billing/# — see monitor.js for
 // the cron side that actually fires it.
-const TOPIC_REMINDER = "smartmeter/telegram/reminder";
+const TOPIC_REMINDER = `smartmeter/${DEVICE_ID}/telegram/reminder`;
 
 const MIN_LIMIT = 100;
 const MAX_LIMIT = 10000;

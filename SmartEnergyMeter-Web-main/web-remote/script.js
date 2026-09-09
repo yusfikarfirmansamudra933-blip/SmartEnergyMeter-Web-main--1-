@@ -7,9 +7,14 @@
 const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const MQTT_USERNAME = "smartenergymeterweb";
 const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
-const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
+// Hardcoded to the one physical device for now — matches DEVICE_ID in the
+// firmware's config.local.h and the "meter-01" row in web-remote/devices.html.
+// Reading which device(s) to watch from Supabase per signed-in user is the
+// next step once there's more than one unit to actually test that against.
+const DEVICE_ID = "meter-01";
+const TOPIC_DATA = `smartmeter/${DEVICE_ID}/data`;
+const TOPIC_STATUS = `smartmeter/${DEVICE_ID}/status`;
+const TOPIC_BILLING_WEEKLY = `smartmeter/${DEVICE_ID}/billing/weekly`;
 
 const ONLINE_COLOR = "#4edea3";
 const OFFLINE_COLOR = "#ffb4ab";

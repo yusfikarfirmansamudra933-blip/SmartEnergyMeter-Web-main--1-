@@ -76,3 +76,20 @@ String wifiSSID()
 {
     return WiFi.SSID();
 }
+
+String getDeviceId()
+{
+    if (strlen(DEVICE_ID) > 0)
+    {
+        return String(DEVICE_ID);
+    }
+
+    String mac = WiFi.macAddress();
+    mac.replace(":", "");
+    mac.toLowerCase();
+
+    // Last 3 bytes (6 hex chars) — the NIC-specific part, so devices from
+    // the same manufacturing batch (same OUI prefix) still get distinct
+    // ids without needing the full 12-char address.
+    return mac.substring(6);
+}

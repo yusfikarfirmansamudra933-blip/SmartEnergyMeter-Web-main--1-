@@ -70,28 +70,32 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 | User | Dipakai oleh | Hak akses |
 |---|---|---|
 | (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
-| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/data`, `smartmeter/status` saja. **Publish harus di-deny** (topic `#`) |
-| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`, `smartmeter/billing/#`. Publish `smartmeter/cmd/limit`, `smartmeter/telegram/#`, `smartmeter/billing/#` |
+| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/billing/#`. **Publish harus di-deny** (topic `#`) |
+| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid`. Publish `smartmeter/+/cmd/limit`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid` |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
 
 ### Topic MQTT
 
+Sebagian besar topic sekarang dinamai `smartmeter/<deviceId>/...` (bukan flat `smartmeter/...` lagi) supaya beberapa device fisik tidak bentrok di broker yang sama. `<deviceId>` default-nya diambil dari 3 byte terakhir MAC address chip ESP32, atau bisa di-override lewat `DEVICE_ID` di `config.local.h` (dipakai supaya cocok dengan id yang didaftarkan di `web-remote/devices.html`, misal `meter-01`). Web-remote saat ini masih hardcode ke satu `DEVICE_ID` (`meter-01`) di tiap file — dukungan pilih-device dinamis dari Supabase menyusul.
+
+Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-device — mau notifikasi ke chat mana itu urusan per-user, bukan per-device (baru benar-benar terikat ke akun setelah bagian Telegram di Fase 1 rencana multi-device selesai).
+
 | Topic | Arah | Isi |
 |---|---|---|
-| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, dll), **retained** |
-| `smartmeter/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
-| `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
-| `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
-| `smartmeter/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
-| `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained |
-| `smartmeter/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload), retained |
-| `smartmeter/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan terkirim (dedup), retained |
-| `smartmeter/telegram/reminder` | bot (`/reminder`) → tersimpan di broker | JSON `{ "day": 25, "message": "..." }` pengingat bayar listrik custom, retained |
-| `smartmeter/telegram/reminder_state` | `api/monitor.js` → tersimpan di broker | Bulan terakhir pengingat custom terkirim (dedup), retained |
-| `smartmeter/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, histori harian bersama semua device, retained |
-| `smartmeter/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
-| `smartmeter/billing/daily_start`, `smartmeter/billing/weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu, dipakai hitung delta pemakaian, retained |
+| `smartmeter/<deviceId>/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, deviceId, dll), **retained** |
+| `smartmeter/<deviceId>/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
+| `smartmeter/<deviceId>/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
+| `smartmeter/<deviceId>/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
+| `smartmeter/<deviceId>/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
+| `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained — **global, bukan per-device** |
+| `smartmeter/<deviceId>/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload) untuk device ini, retained |
+| `smartmeter/<deviceId>/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan device ini terkirim (dedup), retained |
+| `smartmeter/<deviceId>/telegram/reminder` | bot (`/reminder`) → tersimpan di broker | JSON `{ "day": 25, "message": "..." }` pengingat bayar listrik custom untuk device ini, retained |
+| `smartmeter/<deviceId>/telegram/reminder_state` | `api/monitor.js` → tersimpan di broker | Bulan terakhir pengingat custom device ini terkirim (dedup), retained |
+| `smartmeter/<deviceId>/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, histori harian device ini, retained |
+| `smartmeter/<deviceId>/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
+| `smartmeter/<deviceId>/billing/daily_start`, `.../billing/weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu device ini, dipakai hitung delta pemakaian, retained |
 
 ## Menyiapkan dashboard cloud & bot Telegram (`web-remote/`)
 

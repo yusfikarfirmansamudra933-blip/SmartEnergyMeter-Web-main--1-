@@ -9,6 +9,7 @@
 
 #include "config.h"
 #include "globals.h"
+#include "wifiManager.h"
 
 //==========================================================
 // MQTT CLIENT
@@ -28,11 +29,42 @@ const unsigned long RECONNECT_INTERVAL_MS = 5000;
 // MQTT TOPIC
 //==========================================================
 
-const char* TOPIC_DATA    = "smartmeter/data";
-const char* TOPIC_STATUS  = "smartmeter/status";
-const char* TOPIC_LIMIT   = "smartmeter/cmd/limit";
-const char* TOPIC_RESTART = "smartmeter/cmd/restart";
-const char* TOPIC_RESET   = "smartmeter/cmd/reset";
+// Built once on first use (see topicPrefix() below) instead of at static-
+// init time, because getDeviceId() reads WiFi.macAddress() — not valid
+// until wifiBegin() has run, which happens after globals/statics are
+// already constructed.
+String topicData;
+String topicStatus;
+String topicLimit;
+String topicRestart;
+String topicReset;
+String mqttClientId;
+bool topicsInitialized = false;
+
+void initTopicsOnce()
+{
+    if (topicsInitialized)
+    {
+        return;
+    }
+
+    const String prefix = "smartmeter/" + getDeviceId() + "/";
+    topicData = prefix + "data";
+    topicStatus = prefix + "status";
+    topicLimit = prefix + "cmd/limit";
+    topicRestart = prefix + "cmd/restart";
+    topicReset = prefix + "cmd/reset";
+    // Was a hardcoded "ESP32SmartMeter" — fine for one device, but the
+    // broker drops whichever connection loses a client-id collision, so
+    // two physical units sharing that string would fight each other for
+    // the connection every reconnect cycle.
+    mqttClientId = "ESP32SmartMeter-" + getDeviceId();
+    topicsInitialized = true;
+
+    Serial.print("MQTT device id: ");
+    Serial.println(getDeviceId());
+}
+
 const unsigned long PUBLISH_INTERVAL_MS = 1000;
 unsigned long lastPublish = 0;
 
@@ -59,7 +91,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // POWER LIMIT
     //======================================================
 
-    if (String(topic) == TOPIC_LIMIT)
+    if (String(topic) == topicLimit)
     {
         float value = message.toFloat();
 
@@ -80,7 +112,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // RESTART ESP32
     //======================================================
 
-    else if (String(topic) == TOPIC_RESTART)
+    else if (String(topic) == topicRestart)
     {
         Serial.println("===== MQTT RESTART =====");
 
@@ -93,7 +125,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // FACTORY RESET
     //======================================================
 
-    else if (String(topic) == TOPIC_RESET)
+    else if (String(topic) == topicReset)
     {
         Serial.println("===== MQTT FACTORY RESET =====");
 
@@ -116,6 +148,11 @@ void mqttBegin()
         Serial.println("MQTT credentials are not configured");
         return;
     }
+
+    // Needs WiFi.macAddress(), so this can't run at static-init time — see
+    // initTopicsOnce()'s doc comment. wifiBegin() has already run by the
+    // time main.cpp calls mqttBegin(), so the MAC is available.
+    initTopicsOnce();
 
     if (MQTT_TLS_INSECURE)
         espClient.setInsecure();
@@ -147,13 +184,13 @@ void mqttReconnect()
     // Last Will: if the device drops off ungracefully (power loss, WiFi
     // loss), the broker publishes "offline" on our behalf so consumers can
     // tell stale retained data from a genuinely live device.
-    if (mqtt.connect("ESP32SmartMeter", MQTT_USERNAME, MQTT_PASSWORD,
-                      TOPIC_STATUS, 1, true, "offline"))
+    if (mqtt.connect(mqttClientId.c_str(), MQTT_USERNAME, MQTT_PASSWORD,
+                      topicStatus.c_str(), 1, true, "offline"))
     {
-        mqtt.publish(TOPIC_STATUS, "online", true);
-        mqtt.subscribe(TOPIC_LIMIT);
-        mqtt.subscribe(TOPIC_RESTART);
-        mqtt.subscribe(TOPIC_RESET);
+        mqtt.publish(topicStatus.c_str(), "online", true);
+        mqtt.subscribe(topicLimit.c_str());
+        mqtt.subscribe(topicRestart.c_str());
+        mqtt.subscribe(topicReset.c_str());
     }
 }
 
@@ -205,6 +242,7 @@ void mqttPublish()
     doc["wifi"] = (WiFi.status() == WL_CONNECTED);
     doc["sensor"] = sensorOnline;
     doc["trip"] = overload;
+    doc["deviceId"] = getDeviceId();
 
     String json;
 
@@ -213,7 +251,7 @@ void mqttPublish()
     Serial.print("Publish : ");
     Serial.println(json);
 
-    if (mqtt.publish(TOPIC_DATA, json.c_str(), true))
+    if (mqtt.publish(topicData.c_str(), json.c_str(), true))
     {
         Serial.println("PUBLISH SUCCESS");
     }
