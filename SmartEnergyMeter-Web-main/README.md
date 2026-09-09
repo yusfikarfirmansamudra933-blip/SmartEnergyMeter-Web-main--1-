@@ -69,6 +69,7 @@ Supaya beberapa unit fisik bisa dipakai tanpa reflash/edit config satu-satu per 
 
 - **Akun & daftar device** (`web-remote/login.html`, `devices.html`) — login pakai magic link email (Supabase Auth), tiap user bisa punya beberapa device, datanya (device, billing, dst) disimpan di Postgres (Supabase) dengan Row Level Security supaya hanya kelihatan oleh pemiliknya. Skemanya di `web-remote/supabase/schema.sql`.
 - **Topic MQTT per-device** — lihat bagian "Topic MQTT" di bawah; tiap device generate id sendiri dari MAC address (atau `DEVICE_ID` override di `config.local.h`).
+- **Bot Telegram terikat ke akun** — chat Telegram tidak lagi otomatis "mengklaim" notifikasi siapa cepat dia dapat; harus dihubungkan lewat kode dari `devices.html` (tabel `telegram_link_codes`, berlaku 15 menit) + command `/link <kode>` di bot, tersimpan permanen di `telegram_links`. Satu akun bisa punya banyak device; bot pilih device pertama secara default, atau bisa disebutkan id-nya di akhir perintah. Lihat bagian "Command bot Telegram" di bawah.
 - **Pairing dari OLED** — device baru (atau setelah factory reset) belum "dipasangkan" ke akun mana pun:
   1. OLED menampilkan layar "Pairing" dengan kode (id device-nya, misal `a1b2c3`), menggantikan halaman metrik biasa, sampai proses pairing selesai.
   2. Di `devices.html`, isi nama + kode itu, klik **Tambah**.
@@ -94,7 +95,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 |---|---|---|
 | (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
 | `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`, `devices.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/billing/#`. Publish **hanya** `smartmeter/+/claimed` (dipakai `devices.html` saat pairing) — publish topic lain harus tetap di-deny (`#`). Rule allow untuk `claimed` harus dievaluasi **sebelum** rule deny `#` (urutan rule penting di EMQX) |
-| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid`. Publish `smartmeter/+/cmd/limit`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`, `smartmeter/telegram/chatid` |
+| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#`. Publish `smartmeter/+/cmd/limit`, `smartmeter/+/telegram/#`, `smartmeter/+/billing/#` |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
 
@@ -102,7 +103,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 Sebagian besar topic sekarang dinamai `smartmeter/<deviceId>/...` (bukan flat `smartmeter/...` lagi) supaya beberapa device fisik tidak bentrok di broker yang sama. `<deviceId>` default-nya diambil dari 3 byte terakhir MAC address chip ESP32, atau bisa di-override lewat `DEVICE_ID` di `config.local.h` (dipakai supaya cocok dengan id yang didaftarkan di `web-remote/devices.html`, misal `meter-01`). Web-remote saat ini masih hardcode ke satu `DEVICE_ID` (`meter-01`) di tiap file — dukungan pilih-device dinamis dari Supabase menyusul.
 
-Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-device — mau notifikasi ke chat mana itu urusan per-user, bukan per-device (baru benar-benar terikat ke akun setelah bagian Telegram di Fase 1 rencana multi-device selesai).
+Chat ID Telegram **tidak lagi** lewat MQTT retained topic (topic `smartmeter/telegram/chatid` yang lama sudah tidak dipakai) — sekarang tersimpan di tabel `telegram_links` (Supabase), terikat ke `user_id`, bukan ke device tertentu. Lihat bagian "Command bot Telegram" untuk alur `/link`-nya.
 
 | Topic | Arah | Isi |
 |---|---|---|
@@ -112,7 +113,6 @@ Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-de
 | `smartmeter/<deviceId>/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
 | `smartmeter/<deviceId>/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
 | `smartmeter/<deviceId>/claimed` | `devices.html` → ESP32 | Publish apa saja (retained) untuk menandai device sudah dipasangkan ke akun — lihat bagian "Multi-device" di atas |
-| `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained — **global, bukan per-device** |
 | `smartmeter/<deviceId>/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload) untuk device ini, retained |
 | `smartmeter/<deviceId>/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan device ini terkirim (dedup), retained |
 | `smartmeter/<deviceId>/telegram/reminder` | bot (`/reminder`) → tersimpan di broker | JSON `{ "day": 25, "message": "..." }` pengingat bayar listrik custom untuk device ini, retained |
@@ -129,13 +129,17 @@ Chat ID Telegram (`smartmeter/telegram/chatid`) sengaja **tidak** dinamai per-de
    - `MQTT_USERNAME`, `MQTT_PASSWORD` — kredensial `smartenergymeterweb` (dipakai script.js sisi client, jadi memang publik — makanya harus read-only)
    - `BOT_MQTT_USERNAME`, `BOT_MQTT_PASSWORD` — kredensial `smartenergymeterbot`
    - `TELEGRAM_BOT_TOKEN` — token dari [@BotFather](https://t.me/BotFather)
+   - `SUPABASE_URL` — sama dengan yang dipakai di `supabase-client.js` (Project URL)
+   - `SUPABASE_SERVICE_ROLE_KEY` — dari Project Settings → API → **Secret keys** (`sb_secret_...`). **Beda** dari publishable/anon key yang dipakai `supabase-client.js` — key ini bypass Row Level Security sepenuhnya, dipakai `api/telegram.js`/`api/monitor.js` untuk resolve "chat Telegram ini punya akun mana" dan tulis histori tagihan. Jangan pernah taruh di kode sisi client.
 4. Daftarkan webhook bot: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain-vercel>/api/telegram"`
 5. Daftarkan daftar command bot (untuk autocomplete `/` di Telegram) lewat `setMyCommands` — lihat daftar command di bawah.
 6. `GET /api/monitor` harus dipanggil secara berkala — endpoint ini bukan cuma untuk notifikasi (offline/overload), tapi juga **satu-satunya tempat** yang menghitung & menyimpan histori tagihan harian/mingguan (`smartmeter/billing/*`), mengirim ringkasan Telegram (21:00 WIB harian, Minggu 21:00 WIB mingguan), dan mengecek pengingat bayar listrik custom (`/reminder`, jam 08:00 WIB). Kalau endpoint ini tidak pernah dipanggil, histori tagihan tidak akan pernah ter-update dan pengingat custom tidak akan pernah terkirim. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.
 
 ### Command bot Telegram
 
-`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/limit` `/status` — cek data. `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
+Sebelum bisa pakai command lain, chat harus **terhubung ke akun** dulu: buka `devices.html`, klik **Hubungkan Telegram** untuk dapat kode (berlaku 15 menit), kirim `/link <kode>` ke bot. Command lain otomatis pakai device pertama di akun itu; kalau akun punya lebih dari 1 device, tambahkan id-nya di akhir perintah (misal `/watt meter-01`) — lihat `/devices` untuk daftar id.
+
+`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/limit` `/status` — cek data. `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/devices` — daftar device yang terhubung ke akun. `/link <kode>` — hubungkan chat ini ke akun web. `/help` — bantuan.
 
 ## Catatan keamanan
 

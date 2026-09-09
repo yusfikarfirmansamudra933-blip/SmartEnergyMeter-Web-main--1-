@@ -1,30 +1,51 @@
 const mqtt = require("mqtt");
+const { createClient } = require("@supabase/supabase-js");
 
 // Dedicated bot MQTT user (server-side only, never shipped to the browser).
 // Unlike the public dashboard's read-only user, this one may publish to
-// smartmeter/cmd/limit and smartmeter/telegram/# — see .gitignore'd
+// smartmeter/+/cmd/limit and smartmeter/+/telegram/# — see .gitignore'd
 // web-remote/bot-credentials.local.txt for the ACL this user needs.
 const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
 const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// See api/monitor.js's DEVICE_ID comment — same stopgap single hardcoded
-// device, same reasoning for which topics are namespaced vs. left global.
-const DEVICE_ID = "meter-01";
-const TOPIC_DATA = `smartmeter/${DEVICE_ID}/data`;
-const TOPIC_STATUS = `smartmeter/${DEVICE_ID}/status`;
-const TOPIC_LIMIT_CMD = `smartmeter/${DEVICE_ID}/cmd/limit`;
-const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
-const TOPIC_BILLING_DAILY = `smartmeter/${DEVICE_ID}/billing/daily`;
-// Reminder is user-set (not auto-computed like the daily/weekly summary),
-// so it lives under telegram/# rather than billing/# — see monitor.js for
-// the cron side that actually fires it.
-const TOPIC_REMINDER = `smartmeter/${DEVICE_ID}/telegram/reminder`;
+// Server-side only (service role key bypasses Row Level Security — never
+// expose this to a browser, unlike the anon key in supabase-client.js).
+//
+// Built lazily instead of at module load: createClient() throws
+// synchronously if the env vars are missing/empty, and since this whole
+// file is one Vercel function, that would take down every command
+// (including /help and the plain webhook health check) rather than just
+// the ones that actually need Supabase — see getSupabase()'s call sites.
+let supabase = null;
+function getSupabase() {
+  if (!supabase) {
+    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY belum diset di Vercel");
+    }
+    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
+  }
+  return supabase;
+}
 
 const MIN_LIMIT = 100;
 const MAX_LIMIT = 10000;
 const REMINDER_HOUR_WIB = 8;
+const LINK_CODE_TTL_MS = 15 * 60 * 1000;
+
+// Per-device MQTT topics this file talks to — a plain object instead of the
+// old module-level constants, since which device a command targets is now
+// resolved per-message (see resolveDevice()) instead of being one fixed id.
+function topicsFor(deviceId) {
+  return {
+    data: `smartmeter/${deviceId}/data`,
+    status: `smartmeter/${deviceId}/status`,
+    limitCmd: `smartmeter/${deviceId}/cmd/limit`,
+    billingDaily: `smartmeter/${deviceId}/billing/daily`,
+    reminder: `smartmeter/${deviceId}/telegram/reminder`,
+  };
+}
 
 function connectBot() {
   return mqtt.connect(MQTT_WS_URL, {
@@ -36,11 +57,11 @@ function connectBot() {
 }
 
 // Both topics are retained by the firmware, so a fresh subscribe gets the
-// broker's last known values instantly. TOPIC_STATUS is set via MQTT Last
-// Will, so it reflects true online/offline even if the device dropped off
-// ungracefully — TOPIC_DATA alone would otherwise look "live" forever since
-// it just replays whatever was last published, however old that is.
-function fetchDeviceState(timeoutMs = 4000) {
+// broker's last known values instantly. status is set via MQTT Last Will,
+// so it reflects true online/offline even if the device dropped off
+// ungracefully — data alone would otherwise look "live" forever since it
+// just replays whatever was last published, however old that is.
+function fetchDeviceState(topics, timeoutMs = 4000) {
   return new Promise((resolve, reject) => {
     const client = connectBot();
     let status = null;
@@ -55,13 +76,13 @@ function fetchDeviceState(timeoutMs = 4000) {
     const timer = setTimeout(finish, timeoutMs);
 
     client.on("connect", () => {
-      client.subscribe(TOPIC_STATUS);
-      client.subscribe(TOPIC_DATA);
+      client.subscribe(topics.status);
+      client.subscribe(topics.data);
     });
 
     client.on("message", (topic, payload) => {
-      if (topic === TOPIC_STATUS) status = payload.toString();
-      if (topic === TOPIC_DATA) {
+      if (topic === topics.status) status = payload.toString();
+      if (topic === topics.data) {
         try { data = JSON.parse(payload.toString()); } catch { /* ignore malformed packet */ }
       }
       if (status !== null && data !== null) finish();
@@ -109,12 +130,6 @@ function fetchTopic(topic, timeoutMs = 4000) {
   });
 }
 
-function saveChatId(chatId) {
-  return publishAndWait(TOPIC_CHAT_ID, String(chatId), { retain: true }).catch((err) => {
-    console.error("Failed to save chat id:", err);
-  });
-}
-
 function num(value, digits) {
   return Number(value || 0).toFixed(digits);
 }
@@ -132,6 +147,48 @@ function formatRupiah(value) {
 // the serverless runtime's local timezone.
 function nowWIB() { return new Date(Date.now() + 7 * 60 * 60 * 1000); }
 function dayKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`; }
+
+// Resolves which device a command should act on: chat -> linked account
+// (telegram_links) -> that account's devices. A trailing "<deviceId>" word
+// in the raw arg string picks a specific one when the user has more than
+// one, e.g. "/watt meter-01" — otherwise defaults to the oldest-registered
+// device (matches the old single-device behavior exactly when there's only
+// one, which covers the common case with zero extra steps).
+async function resolveDevice(chatId, rawArg) {
+  const { data: link } = await getSupabase()
+    .from("telegram_links")
+    .select("user_id")
+    .eq("chat_id", String(chatId))
+    .maybeSingle();
+
+  if (!link) {
+    return {
+      error: "Chat ini belum terhubung ke akun manapun.\n\nBuka web dashboard, klik \"Hubungkan Telegram\", lalu kirim kodenya ke sini pakai /link <kode>.",
+    };
+  }
+
+  const { data: devices } = await getSupabase()
+    .from("devices")
+    .select("*")
+    .eq("owner_user_id", link.user_id)
+    .order("created_at", { ascending: true });
+
+  if (!devices || devices.length === 0) {
+    return { error: "Akun ini belum punya device terdaftar. Tambahkan dulu lewat web dashboard." };
+  }
+
+  const trimmed = (rawArg || "").trim();
+  if (trimmed) {
+    const tokens = trimmed.split(/\s+/);
+    const last = tokens[tokens.length - 1];
+    const matched = devices.find((d) => d.id === last);
+    if (matched) {
+      return { device: matched, devices, remainingArg: tokens.slice(0, -1).join(" ") };
+    }
+  }
+
+  return { device: devices[0], devices, remainingArg: trimmed };
+}
 
 function statusText(data) {
   return [
@@ -182,17 +239,68 @@ const HELP_TEXT = [
   "/reminder <tanggal> <pesan> - pengingat bayar listrik tiap bulan, contoh: /reminder 25 Jangan lupa bayar listrik!",
   "/reminder - lihat pengingat yang aktif",
   "/reminder off - matikan pengingat",
+  "/devices - lihat device yang terhubung ke akun Anda",
   "",
-  "Kirim /start sekali supaya saya bisa kirim notifikasi otomatis (offline / kelebihan batas daya).",
+  "Punya lebih dari 1 device? Tambahkan id-nya di akhir perintah, misal /watt meter-01 — tanpa itu, device pertama yang dipakai.",
+  "",
+  "Kirim /link <kode> (dari web dashboard) sekali supaya saya tahu chat ini milik akun mana, dan bisa kirim notifikasi otomatis (offline / kelebihan batas daya).",
   "Atau tanya bebas juga bisa, misalnya \"berapa watt sekarang\".",
 ].join("\n");
 
-// Renders the last 7 days of billing history (smartmeter/billing/daily,
+async function handleLink(arg, chatId) {
+  const code = (arg || "").trim();
+  if (!code) {
+    return "Format: /link <kode>. Ambil kodenya dari tombol \"Hubungkan Telegram\" di web dashboard.";
+  }
+
+  const { data: row } = await getSupabase().from("telegram_link_codes").select("*").eq("code", code).maybeSingle();
+  if (!row) {
+    return "Kode tidak ditemukan atau sudah pernah dipakai. Generate kode baru dari web dashboard.";
+  }
+
+  const ageMs = Date.now() - new Date(row.created_at).getTime();
+  if (ageMs > LINK_CODE_TTL_MS) {
+    await getSupabase().from("telegram_link_codes").delete().eq("code", code);
+    return "Kode sudah kedaluwarsa (berlaku 15 menit). Generate kode baru dari web dashboard.";
+  }
+
+  const { error } = await getSupabase().from("telegram_links").upsert({ chat_id: String(chatId), user_id: row.user_id });
+  await getSupabase().from("telegram_link_codes").delete().eq("code", code);
+
+  if (error) {
+    return `⚠️ Gagal menghubungkan: ${error.message}`;
+  }
+  return "✅ Berhasil terhubung! Sekarang saya bisa jawab soal device di akun Anda dan kirim notifikasi otomatis.";
+}
+
+async function handleDevices(chatId) {
+  const { data: link } = await getSupabase().from("telegram_links").select("user_id").eq("chat_id", String(chatId)).maybeSingle();
+  if (!link) {
+    return "Chat ini belum terhubung ke akun manapun. Kirim /link <kode> dari web dashboard dulu.";
+  }
+
+  const { data: devices } = await getSupabase()
+    .from("devices")
+    .select("*")
+    .eq("owner_user_id", link.user_id)
+    .order("created_at", { ascending: true });
+
+  if (!devices || devices.length === 0) {
+    return "Belum ada device terdaftar di akun ini. Tambahkan lewat web dashboard.";
+  }
+
+  const lines = ["📟 Device di akun Anda:"];
+  devices.forEach((d, i) => lines.push(`${i === 0 ? "→" : " "} ${d.id} — ${d.name}`));
+  lines.push("", `Tanda → dipakai otomatis kalau tidak disebutkan. Contoh pilih device lain: /watt ${devices[devices.length - 1].id}`);
+  return lines.join("\n");
+}
+
+// Renders the last 7 days of billing history (smartmeter/<id>/billing/daily,
 // already computed by api/monitor.js) as a QuickChart bar chart. QuickChart
 // takes the chart spec straight in the URL and Telegram fetches that URL
 // itself for sendPhoto, so no image handling/hosting needed on our side.
-async function handleHistory() {
-  const raw = await fetchTopic(TOPIC_BILLING_DAILY);
+async function handleHistory(billingDailyTopic) {
+  const raw = await fetchTopic(billingDailyTopic);
   const dailyData = safeParse(raw, {});
   const wib = nowWIB();
   const days = [];
@@ -235,11 +343,11 @@ function parseReminderArg(arg) {
   return { day, message: match[2].trim() };
 }
 
-async function handleReminder(arg) {
+async function handleReminder(arg, reminderTopic) {
   const trimmed = (arg || "").trim();
 
   if (!trimmed) {
-    const reminder = safeParse(await fetchTopic(TOPIC_REMINDER), null);
+    const reminder = safeParse(await fetchTopic(reminderTopic), null);
     if (!reminder) {
       return "🔕 Belum ada pengingat pembayaran.\nSet dengan /reminder <tanggal> <pesan>, contoh: /reminder 25 Jangan lupa bayar listrik!";
     }
@@ -248,7 +356,7 @@ async function handleReminder(arg) {
 
   if (trimmed.toLowerCase() === "off") {
     // Empty retained payload clears it — same convention as a normal MQTT delete.
-    await publishAndWait(TOPIC_REMINDER, "", { retain: true });
+    await publishAndWait(reminderTopic, "", { retain: true });
     return "🔕 Pengingat pembayaran dimatikan.";
   }
 
@@ -256,7 +364,7 @@ async function handleReminder(arg) {
   if (!parsed) {
     return "Format: /reminder <tanggal 1-28> <pesan>\nContoh: /reminder 25 Jangan lupa bayar listrik!\nAtau /reminder off untuk matikan.";
   }
-  await publishAndWait(TOPIC_REMINDER, JSON.stringify(parsed), { retain: true });
+  await publishAndWait(reminderTopic, JSON.stringify(parsed), { retain: true });
   return `✅ Pengingat diset: tanggal ${parsed.day} tiap bulan, jam ${REMINDER_HOUR_WIB}:00 WIB\nPesan: "${parsed.message}"`;
 }
 
@@ -303,13 +411,13 @@ async function sendTelegramPhoto(chatId, photoUrl, caption) {
   });
 }
 
-async function handleSetLimit(arg) {
+async function handleSetLimit(arg, limitCmdTopic) {
   const value = Number(arg);
   if (!arg || !Number.isFinite(value) || value < MIN_LIMIT || value > MAX_LIMIT) {
     return `Format: /setlimit <angka>. Contoh: /setlimit 500\nBatas harus antara ${MIN_LIMIT}-${MAX_LIMIT} Watt.`;
   }
   try {
-    await publishAndWait(TOPIC_LIMIT_CMD, value);
+    await publishAndWait(limitCmdTopic, value);
     return `✅ Batas daya diubah ke ${value} Watt.`;
   } catch {
     return "⚠️ Gagal mengubah batas daya, perangkat mungkin sedang offline. Coba lagi.";
@@ -334,30 +442,55 @@ module.exports = async (req, res) => {
   const command = parsed ? parsed.command : null;
   const isHelp = command === "start" || command === "help" || /bantuan|^menu$/i.test(text.trim());
 
-  await saveChatId(chatId);
-
   let reply;
   let photoReply = null;
+
   if (isHelp) {
     reply = HELP_TEXT;
-  } else if (command === "setlimit") {
-    reply = await handleSetLimit(parsed.arg);
-  } else if (command === "riwayat" || command === "history") {
-    const result = await handleHistory();
-    if (result.photoUrl) photoReply = { url: result.photoUrl, caption: result.text };
-    else reply = result.text;
-  } else if (command === "reminder" || command === "pengingat") {
-    reply = await handleReminder(parsed.arg);
   } else {
+    // Everything past this point needs Supabase (getSupabase(), called
+    // inside handleLink/handleDevices/resolveDevice) — if it's not
+    // configured yet in Vercel's env vars, this throws instead of quietly
+    // returning empty data, so surface it as an actual reply rather than a
+    // bare 500 the person messaging the bot would never see.
     try {
-      const { status, data } = await fetchDeviceState();
-      if (status !== "online" || !data) {
-        reply = "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan.";
+      if (command === "link") {
+        reply = await handleLink(parsed.arg, chatId);
+      } else if (command === "devices" || command === "device") {
+        reply = await handleDevices(chatId);
       } else {
-        reply = formatReply(text, data);
+        const resolution = await resolveDevice(chatId, parsed ? parsed.arg : text);
+        if (resolution.error) {
+          reply = resolution.error;
+        } else {
+          const { device, remainingArg } = resolution;
+          const topics = topicsFor(device.id);
+
+          if (command === "setlimit") {
+            reply = await handleSetLimit(remainingArg, topics.limitCmd);
+          } else if (command === "riwayat" || command === "history") {
+            const result = await handleHistory(topics.billingDaily);
+            if (result.photoUrl) photoReply = { url: result.photoUrl, caption: result.text };
+            else reply = result.text;
+          } else if (command === "reminder" || command === "pengingat") {
+            reply = await handleReminder(remainingArg, topics.reminder);
+          } else {
+            try {
+              const { status, data } = await fetchDeviceState(topics);
+              if (status !== "online" || !data) {
+                reply = "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan.";
+              } else {
+                reply = formatReply(command ? `/${command} ${remainingArg}` : text, data);
+              }
+            } catch {
+              reply = "⚠️ Perangkat sedang offline atau data belum tersedia. Coba lagi nanti.";
+            }
+          }
+        }
       }
-    } catch {
-      reply = "⚠️ Perangkat sedang offline atau data belum tersedia. Coba lagi nanti.";
+    } catch (err) {
+      console.error("Command dispatch failed:", err);
+      reply = "⚠️ Bot sedang ada gangguan teknis di sisi server. Coba lagi nanti.";
     }
   }
 

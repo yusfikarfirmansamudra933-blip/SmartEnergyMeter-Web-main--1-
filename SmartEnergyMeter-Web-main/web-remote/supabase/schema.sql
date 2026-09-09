@@ -38,6 +38,20 @@ create table if not exists public.telegram_links (
 
 create index if not exists telegram_links_user_idx on public.telegram_links (user_id);
 
+-- Short-lived codes for linking a Telegram chat to an account: devices.html
+-- inserts one (RLS-scoped to the signed-in user), the user sends it to the
+-- bot as "/link <code>", and api/telegram.js (server-side, service role
+-- key) resolves it into a telegram_links row and deletes the code. Treated
+-- as expired after 15 minutes regardless of whether it's been deleted yet
+-- (checked at lookup time in code, not enforced here) — no scheduled
+-- cleanup job, stale rows are harmless since the id space isn't reused
+-- while accepting a fresh insert per "Hubungkan Telegram" click.
+create table if not exists public.telegram_link_codes (
+  code text primary key,
+  user_id uuid not null references auth.users(id) on delete cascade,
+  created_at timestamptz not null default now()
+);
+
 -- Billing history, one row per device per day/week — replaces the old
 -- smartmeter/billing/* retained MQTT topics (which held every device's
 -- history in one shared JSON blob; fine for one device, not for many).
@@ -63,6 +77,7 @@ create table if not exists public.billing_weekly (
 -- keeping the key secret.
 alter table public.devices enable row level security;
 alter table public.telegram_links enable row level security;
+alter table public.telegram_link_codes enable row level security;
 alter table public.billing_daily enable row level security;
 alter table public.billing_weekly enable row level security;
 
@@ -74,6 +89,12 @@ create policy devices_owner_all on public.devices
 
 drop policy if exists telegram_links_owner_all on public.telegram_links;
 create policy telegram_links_owner_all on public.telegram_links
+  for all
+  using (user_id = auth.uid())
+  with check (user_id = auth.uid());
+
+drop policy if exists telegram_link_codes_owner_all on public.telegram_link_codes;
+create policy telegram_link_codes_owner_all on public.telegram_link_codes
   for all
   using (user_id = auth.uid())
   with check (user_id = auth.uid());

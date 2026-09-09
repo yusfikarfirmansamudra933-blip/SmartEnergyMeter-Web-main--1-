@@ -48,12 +48,20 @@
 <p class="font-body-sm text-body-sm hidden" id="formStatus"></p>
 </div>
 
-<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-lg flex items-center gap-3 opacity-60">
+<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-lg flex flex-col space-y-gutter-sm">
+<div class="flex items-center gap-3">
 <div class="w-9 h-9 rounded-lg bg-surface-container flex items-center justify-center text-secondary shrink-0"><span class="material-symbols-outlined text-[18px]">send</span></div>
 <div class="flex flex-col">
 <span class="font-body-md text-body-md text-on-surface font-semibold">Hubungkan Telegram</span>
-<span class="font-body-sm text-body-sm text-on-surface-variant">Segera hadir — bot Telegram belum terhubung ke akun.</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Dapat notifikasi otomatis & tanya data lewat bot.</span>
 </div>
+</div>
+<div id="telegramLinkResult" class="hidden rounded-lg bg-surface-charcoal p-gutter-sm flex flex-col items-center text-center space-y-gutter-xs">
+<span class="font-body-sm text-body-sm text-on-surface-variant">Kirim ke <a class="text-primary underline" href="https://t.me/yusfikar_bot" target="_blank" rel="noopener">@yusfikar_bot</a>:</span>
+<span class="font-metric-unit text-title-md text-primary font-bold tracking-wider" id="telegramLinkCode">-</span>
+<span class="font-body-sm text-body-sm text-on-surface-variant">Berlaku 15 menit.</span>
+</div>
+<button class="w-full rounded-lg bg-surface-container text-on-surface font-body-md text-body-md font-semibold py-2.5 transition-all active:scale-[0.98] disabled:opacity-50" id="telegramLinkBtn" type="button">Generate kode</button>
 </div>
 
 </div>
@@ -180,7 +188,35 @@ async function deleteDevice(id) {
   loadDevices();
 }
 
+// 6-digit numeric code — short enough to type into Telegram by hand,
+// resolved server-side by api/telegram.js's /link handler (see
+// supabase/schema.sql's telegram_link_codes table for the 15-minute TTL).
+function randomLinkCode() {
+  return String(Math.floor(100000 + Math.random() * 900000));
+}
+
+async function generateTelegramLink() {
+  const btn = document.getElementById("telegramLinkBtn");
+  const resultEl = document.getElementById("telegramLinkResult");
+  const codeEl = document.getElementById("telegramLinkCode");
+
+  const { data: { session } } = await supabaseClient.auth.getSession();
+  if (!session) { location.href = "login.html"; return; }
+
+  btn.disabled = true;
+  const code = randomLinkCode();
+  const { error } = await supabaseClient.from("telegram_link_codes").insert({ code, user_id: session.user.id });
+  btn.disabled = false;
+
+  if (error) { alert(`Gagal membuat kode: ${error.message}`); return; }
+
+  codeEl.textContent = `/link ${code}`;
+  resultEl.classList.remove("hidden");
+  btn.textContent = "Generate kode baru";
+}
+
 document.getElementById("addDeviceBtn").addEventListener("click", addDevice);
+document.getElementById("telegramLinkBtn").addEventListener("click", generateTelegramLink);
 document.getElementById("logoutBtn").addEventListener("click", async () => {
   await supabaseClient.auth.signOut();
   location.href = "login.html";
