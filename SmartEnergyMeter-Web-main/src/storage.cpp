@@ -52,7 +52,6 @@ void resetConfig()
 
     preferences.putFloat("limit", powerLimit);
 
-    // See isPaired()'s doc comment for why the default (key absent) is true.
     preferences.putBool("paired", false);
 }
 
@@ -73,7 +72,10 @@ void clearOtaPendingVerify()
 
 bool isPaired()
 {
-    return preferences.getBool("paired", true);
+    // Defaulting to false (unset key = not paired) is what makes a
+    // genuinely fresh device — blank NVS, first boot ever — show the
+    // pairing screen automatically, no factory reset needed first.
+    return preferences.getBool("paired", false);
 }
 
 void markPaired()
