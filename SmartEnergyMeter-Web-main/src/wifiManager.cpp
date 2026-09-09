@@ -4,19 +4,10 @@
 #include <cstring>
 
 #include "config.h"
-#include "storage.h"
-#include "wifiProvision.h"
 
 namespace {
 constexpr unsigned long RECONNECT_INTERVAL_MS = 5000;
 unsigned long reconnectMillis = 0;
-
-// Resolved once in wifiBegin() (stored credentials from a previous portal
-// run, else the compiled config.local.h ones) and reused by wifiLoop()'s
-// reconnect — so both agree on what "the" credentials are regardless of
-// which source they actually came from.
-String resolvedSsid;
-String resolvedPassword;
 }
 
 void wifiBegin()
@@ -25,30 +16,13 @@ void wifiBegin()
 
     WiFi.setAutoReconnect(true);
 
-    resolvedSsid = getStoredWifiSsid();
-    resolvedPassword = getStoredWifiPassword();
-
-    if (resolvedSsid.length() == 0)
+    if (strlen(WIFI_SSID) == 0)
     {
-        if (strlen(WIFI_SSID) > 0)
-        {
-            // Backward compatible: a unit built the old way, with
-            // credentials compiled into config.local.h, keeps working
-            // exactly as before.
-            resolvedSsid = WIFI_SSID;
-            resolvedPassword = WIFI_PASSWORD;
-        }
-        else
-        {
-            // No credentials anywhere — the recommended setup for any new
-            // unit going forward (leave config.local.h's WIFI_SSID empty).
-            // Blocks until the portal form is submitted, then reboots.
-            startProvisioningPortal();
-            return;  // unreachable
-        }
+        Serial.println("WiFi credentials are not configured");
+        return;
     }
 
-    WiFi.begin(resolvedSsid.c_str(), resolvedPassword.c_str());
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
     Serial.println("Connecting to WiFi");
 
 }
@@ -70,16 +44,16 @@ void wifiLoop()
 
     ipPrinted = false;
 
-    if (resolvedSsid.length() == 0 || millis() - reconnectMillis < RECONNECT_INTERVAL_MS)
+    if (strlen(WIFI_SSID) == 0 || millis() - reconnectMillis < RECONNECT_INTERVAL_MS)
         return;
 
     reconnectMillis=millis();
 
-    Serial.printf("Reconnect WiFi (status=%d, ssid=\"%s\")\n", WiFi.status(), resolvedSsid.c_str());
+    Serial.printf("Reconnect WiFi (status=%d, ssid=\"%s\")\n", WiFi.status(), WIFI_SSID);
 
     WiFi.disconnect();
 
-    WiFi.begin(resolvedSsid.c_str(), resolvedPassword.c_str());
+    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
 
 }
 
@@ -101,21 +75,4 @@ int wifiRSSI()
 String wifiSSID()
 {
     return WiFi.SSID();
-}
-
-String getDeviceId()
-{
-    if (strlen(DEVICE_ID) > 0)
-    {
-        return String(DEVICE_ID);
-    }
-
-    String mac = WiFi.macAddress();
-    mac.replace(":", "");
-    mac.toLowerCase();
-
-    // Last 3 bytes (6 hex chars) — the NIC-specific part, so devices from
-    // the same manufacturing batch (same OUI prefix) still get distinct
-    // ids without needing the full 12-char address.
-    return mac.substring(6);
 }

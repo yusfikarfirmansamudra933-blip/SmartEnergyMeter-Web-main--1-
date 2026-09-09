@@ -6,7 +6,6 @@
 
 #include "config.h"
 #include "globals.h"
-#include "storage.h"
 #include "wifiManager.h"
 
 #define SCREEN_WIDTH 128
@@ -265,55 +264,6 @@ display.display();
 
 }
 
-// Same reasoning as drawPairingScreen() below — no drawHeader(), every
-// pixel goes to the AP name and IP the user actually needs to read.
-void oledShowProvisioning(const String &apName)
-{
-
-display.clearDisplay();
-
-display.setTextSize(1);
-
-display.setCursor(0,0);
-
-display.print("Connect ke WiFi:");
-
-display.setCursor(0,10);
-
-display.print(apName);
-
-display.setCursor(0,20);
-
-display.print("Buka 192.168.4.1");
-
-display.display();
-
-}
-
-// Skips drawHeader()'s title bar — on a 128x32 screen every pixel of
-// height matters more here than looking consistent with the other
-// screens, since the code has to actually be readable at a glance.
-void drawPairingScreen()
-{
-
-display.clearDisplay();
-
-display.setTextSize(1);
-
-display.setCursor(0,0);
-
-display.print("Pairing - masukkan:");
-
-display.setTextSize(2);
-
-display.setCursor(4,13);
-
-display.print(getDeviceId());
-
-display.display();
-
-}
-
 void oledLoop()
 {
 
@@ -352,21 +302,6 @@ if(otaPercent!=lastDrawnPercent)
 {
 lastDrawnPercent=otaPercent;
 drawOtaProgress(otaPercent);
-}
-
-return;
-
-}
-
-if(!isPaired())
-{
-
-static bool pairingDrawn=false;
-
-if(!pairingDrawn)
-{
-drawPairingScreen();
-pairingDrawn=true;
 }
 
 return;

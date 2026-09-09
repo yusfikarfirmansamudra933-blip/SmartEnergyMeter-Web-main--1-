@@ -3,7 +3,6 @@
   "private": true,
   "engines": { "node": ">=18" },
   "dependencies": {
-    "mqtt": "^5.10.1",
-    "@supabase/supabase-js": "^2.45.0"
+    "mqtt": "^5.10.1"
   }
 }

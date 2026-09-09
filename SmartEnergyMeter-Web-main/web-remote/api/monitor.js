@@ -1,58 +1,36 @@
 const mqtt = require("mqtt");
-const { createClient } = require("@supabase/supabase-js");
 
 // Triggered periodically by an external cron (cron-job.org, every few
-// minutes — Vercel Hobby only allows daily cron, see README). Each tick,
-// for every device registered in Supabase:
+// minutes — Vercel Hobby only allows daily cron, see README). Each tick:
 // 1. Computes daily/weekly billing totals from the device's cumulative
 //    energy reading and stores them as retained MQTT state, shared by every
-//    browser that opens bill.html.
-// 2. Pushes Telegram alerts (to every chat linked to the device's owner —
-//    see telegram_links) on offline/overload state CHANGES (dedup via
+//    browser that opens bill.html (previously each browser tracked its own
+//    copy in localStorage, so history didn't follow you between devices).
+// 2. Pushes Telegram alerts on offline/overload state CHANGES (dedup via
 //    retained alert-state), plus a daily and weekly usage summary at a
-//    fixed time, plus the owner's custom payment reminder if it's due.
+//    fixed time.
 const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
 const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-// Server-side only (service role key bypasses Row Level Security).
-//
-// Built lazily instead of at module load — createClient() throws
-// synchronously if the env vars are missing, and doing that at import time
-// would take down this whole function with an opaque stack trace instead
-// of the clear JSON error module.exports below returns.
-let supabase = null;
-function getSupabase() {
-  if (!supabase) {
-    if (!process.env.SUPABASE_URL || !process.env.SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY belum diset di Vercel");
-    }
-    supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
-  }
-  return supabase;
-}
-
+const TOPIC_DATA = "smartmeter/data";
+const TOPIC_STATUS = "smartmeter/status";
+const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
+const TOPIC_ALERT_STATE = "smartmeter/telegram/alert_state";
+const TOPIC_SUMMARY_STATE = "smartmeter/telegram/summary_state";
+const TOPIC_REMINDER = "smartmeter/telegram/reminder";
+const TOPIC_REMINDER_STATE = "smartmeter/telegram/reminder_state";
 const REMINDER_HOUR_WIB = 8;
+const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
+const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
+const TOPIC_BILLING_DAILY_START = "smartmeter/billing/daily_start";
+const TOPIC_BILLING_WEEKLY_START = "smartmeter/billing/weekly_start";
+
 // No per-user rate setting exists (no UI for it) — this is the single
 // source of truth now, matching the old client-side default in bill.js.
 const ELECTRICITY_RATE = 1500;
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-
-function topicsFor(deviceId) {
-  return {
-    data: `smartmeter/${deviceId}/data`,
-    status: `smartmeter/${deviceId}/status`,
-    alertState: `smartmeter/${deviceId}/telegram/alert_state`,
-    summaryState: `smartmeter/${deviceId}/telegram/summary_state`,
-    reminder: `smartmeter/${deviceId}/telegram/reminder`,
-    reminderState: `smartmeter/${deviceId}/telegram/reminder_state`,
-    billingDaily: `smartmeter/${deviceId}/billing/daily`,
-    billingWeekly: `smartmeter/${deviceId}/billing/weekly`,
-    billingDailyStart: `smartmeter/${deviceId}/billing/daily_start`,
-    billingWeeklyStart: `smartmeter/${deviceId}/billing/weekly_start`,
-  };
-}
 
 function connectBot() {
   return mqtt.connect(MQTT_WS_URL, {
@@ -111,13 +89,6 @@ async function sendTelegramMessage(chatId, text) {
   });
 }
 
-async function notifyAll(chatIds, text) {
-  for (const chatId of chatIds) {
-    try { await sendTelegramMessage(chatId, text); }
-    catch (err) { console.error("sendTelegramMessage failed:", chatId, err); }
-  }
-}
-
 function num(value, digits) { return Number(value || 0).toFixed(digits); }
 function formatRupiah(value) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0); }
 function safeParse(str, fallback) { try { return str ? JSON.parse(str) : fallback; } catch { return fallback; } }
@@ -131,15 +102,15 @@ function weekOfMonth(d) { return Math.min(Math.floor((d.getUTCDate() - 1) / 7) +
 
 // Computes today's/this-week's usage from the device's cumulative energy
 // counter and republishes the shared billing state if anything changed.
-async function updateBilling(topics, energy, wib, values) {
+async function updateBilling(energy, wib, values) {
   const dayKey = dayKeyOf(wib);
   const monthKey = monthKeyOf(wib);
   const week = weekOfMonth(wib);
 
-  const dailyStart = safeParse(values[topics.billingDailyStart], {});
-  const weeklyStart = safeParse(values[topics.billingWeeklyStart], {});
-  const dailyData = safeParse(values[topics.billingDaily], {});
-  const weeklyData = safeParse(values[topics.billingWeekly], {});
+  const dailyStart = safeParse(values[TOPIC_BILLING_DAILY_START], {});
+  const weeklyStart = safeParse(values[TOPIC_BILLING_WEEKLY_START], {});
+  const dailyData = safeParse(values[TOPIC_BILLING_DAILY], {});
+  const weeklyData = safeParse(values[TOPIC_BILLING_WEEKLY], {});
   let changed = false;
 
   if (dailyStart[dayKey] === undefined) { dailyStart[dayKey] = energy; changed = true; }
@@ -158,10 +129,10 @@ async function updateBilling(topics, energy, wib, values) {
 
   if (changed) {
     await Promise.all([
-      publishAndWait(topics.billingDailyStart, JSON.stringify(dailyStart), { retain: true }),
-      publishAndWait(topics.billingWeeklyStart, JSON.stringify(weeklyStart), { retain: true }),
-      publishAndWait(topics.billingDaily, JSON.stringify(dailyData), { retain: true }),
-      publishAndWait(topics.billingWeekly, JSON.stringify(weeklyData), { retain: true }),
+      publishAndWait(TOPIC_BILLING_DAILY_START, JSON.stringify(dailyStart), { retain: true }),
+      publishAndWait(TOPIC_BILLING_WEEKLY_START, JSON.stringify(weeklyStart), { retain: true }),
+      publishAndWait(TOPIC_BILLING_DAILY, JSON.stringify(dailyData), { retain: true }),
+      publishAndWait(TOPIC_BILLING_WEEKLY, JSON.stringify(weeklyData), { retain: true }),
     ]).catch((err) => console.error("Failed to save billing state:", err));
   }
 
@@ -171,7 +142,7 @@ async function updateBilling(topics, energy, wib, values) {
 // Sends a once-a-day recap (21:00 WIB) and a once-a-week recap (Sunday
 // 21:00 WIB), each guarded by a retained "already sent today" date so a
 // 5-minute cron doesn't fire it more than once.
-async function checkSummaries(chatIds, deviceName, wib, dailyData, weeklyData, summaryStateRaw, summaryStateTopic) {
+async function checkSummaries(chatId, wib, dailyData, weeklyData, summaryStateRaw) {
   const state = safeParse(summaryStateRaw, {});
   const todayKey = dayKeyOf(wib);
   const hour = wib.getUTCHours();
@@ -180,8 +151,8 @@ async function checkSummaries(chatIds, deviceName, wib, dailyData, weeklyData, s
   if (hour === 21 && state.lastDaily !== todayKey) {
     const rp = Number(dailyData[todayKey] || 0);
     const kwh = rp / ELECTRICITY_RATE;
-    await notifyAll(chatIds, [
-      `📋 Ringkasan Hari Ini — ${deviceName}`,
+    await sendTelegramMessage(chatId, [
+      "📋 Ringkasan Hari Ini",
       `${wib.getUTCDate()} ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
       `Energi: ${kwh.toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
@@ -195,8 +166,8 @@ async function checkSummaries(chatIds, deviceName, wib, dailyData, weeklyData, s
     const week = weekOfMonth(wib);
     const rp = Number((weeklyData[monthKey] || {})["week" + week] || 0);
     const kwh = rp / ELECTRICITY_RATE;
-    await notifyAll(chatIds, [
-      `📅 Ringkasan Minggu Ini — ${deviceName}`,
+    await sendTelegramMessage(chatId, [
+      "📅 Ringkasan Minggu Ini",
       `Minggu ${week}, ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
       `Energi: ${kwh.toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
@@ -206,7 +177,7 @@ async function checkSummaries(chatIds, deviceName, wib, dailyData, weeklyData, s
   }
 
   if (changed) {
-    try { await publishAndWait(summaryStateTopic, JSON.stringify(state), { retain: true }); }
+    try { await publishAndWait(TOPIC_SUMMARY_STATE, JSON.stringify(state), { retain: true }); }
     catch (err) { console.error("Failed to save summary state:", err); }
   }
 }
@@ -214,7 +185,7 @@ async function checkSummaries(chatIds, deviceName, wib, dailyData, weeklyData, s
 // User-set reminder (day-of-month + message, from the bot's /reminder
 // command) fired once a month at a fixed hour, deduped the same way as
 // checkSummaries: a retained "month already sent" marker.
-async function checkReminder(chatIds, wib, reminderRaw, reminderStateRaw, reminderStateTopic) {
+async function checkReminder(chatId, wib, reminderRaw, reminderStateRaw) {
   const reminder = safeParse(reminderRaw, null);
   if (!reminder || !reminder.day || !reminder.message) return;
 
@@ -224,49 +195,50 @@ async function checkReminder(chatIds, wib, reminderRaw, reminderStateRaw, remind
     return;
   }
 
-  await notifyAll(chatIds, `🔔 Pengingat Pembayaran Listrik\n${reminder.message}`);
+  await sendTelegramMessage(chatId, `🔔 Pengingat Pembayaran Listrik\n${reminder.message}`);
   state.lastSent = monthKey;
-  try { await publishAndWait(reminderStateTopic, JSON.stringify(state), { retain: true }); }
+  try { await publishAndWait(TOPIC_REMINDER_STATE, JSON.stringify(state), { retain: true }); }
   catch (err) { console.error("Failed to save reminder state:", err); }
 }
 
-async function processDevice(device, chatIds) {
-  const topics = topicsFor(device.id);
+module.exports = async (req, res) => {
   const values = await fetchRetained([
-    topics.status, topics.data, topics.alertState, topics.summaryState,
-    topics.billingDaily, topics.billingWeekly, topics.billingDailyStart, topics.billingWeeklyStart,
-    topics.reminder, topics.reminderState,
+    TOPIC_STATUS, TOPIC_DATA, TOPIC_CHAT_ID, TOPIC_ALERT_STATE, TOPIC_SUMMARY_STATE,
+    TOPIC_BILLING_DAILY, TOPIC_BILLING_WEEKLY, TOPIC_BILLING_DAILY_START, TOPIC_BILLING_WEEKLY_START,
+    TOPIC_REMINDER, TOPIC_REMINDER_STATE,
   ]);
 
-  const isOffline = values[topics.status] !== "online";
+  const isOffline = values[TOPIC_STATUS] !== "online";
   let data = null;
-  try { data = values[topics.data] ? JSON.parse(values[topics.data]) : null; } catch { /* ignore */ }
+  try { data = values[TOPIC_DATA] ? JSON.parse(values[TOPIC_DATA]) : null; } catch { /* ignore */ }
 
-  // Billing history tracks regardless of whether anyone has linked a
-  // Telegram chat yet — it's shared state for bill.html, not a notification.
-  let dailyData = safeParse(values[topics.billingDaily], {});
-  let weeklyData = safeParse(values[topics.billingWeekly], {});
+  // Billing history tracks regardless of whether anyone has registered a
+  // Telegram chat — it's shared state for bill.html, not a notification.
+  let dailyData = safeParse(values[TOPIC_BILLING_DAILY], {});
+  let weeklyData = safeParse(values[TOPIC_BILLING_WEEKLY], {});
   if (!isOffline && data && Number.isFinite(Number(data.energy))) {
-    const billing = await updateBilling(topics, Number(data.energy), nowWIB(), values);
+    const billing = await updateBilling(Number(data.energy), nowWIB(), values);
     dailyData = billing.dailyData;
     weeklyData = billing.weeklyData;
   }
 
-  if (chatIds.length === 0) {
-    return { deviceId: device.id, billingUpdated: !isOffline && !!data, skipped: "no linked telegram chat" };
+  const chatId = values[TOPIC_CHAT_ID];
+  if (!chatId) {
+    res.status(200).json({ ok: true, billingUpdated: !isOffline && !!data, skipped: "no chat id registered yet" });
+    return;
   }
 
-  let alertState = safeParse(values[topics.alertState], {});
+  let alertState = safeParse(values[TOPIC_ALERT_STATE], {});
   const newState = { ...alertState };
   let changed = false;
   const notifications = [];
 
   if (isOffline && !alertState.offline) {
-    notifications.push(`🔴 ${device.name} offline / kehilangan koneksi.`);
+    notifications.push("🔴 Smart Energy Meter offline / kehilangan koneksi.");
     newState.offline = true;
     changed = true;
   } else if (!isOffline && alertState.offline) {
-    notifications.push(`🟢 ${device.name} online kembali.`);
+    notifications.push("🟢 Smart Energy Meter online kembali.");
     newState.offline = false;
     changed = true;
   }
@@ -274,64 +246,30 @@ async function processDevice(device, chatIds) {
   if (!isOffline && data) {
     const overloaded = !!data.trip;
     if (overloaded && !alertState.overload) {
-      notifications.push(`⚠️ ${device.name}: daya melebihi batas! ${num(data.power, 0)} W (batas ${num(data.limit, 0)} W)`);
+      notifications.push(`⚠️ Daya melebihi batas! ${num(data.power, 0)} W (batas ${num(data.limit, 0)} W)`);
       newState.overload = true;
       changed = true;
     } else if (!overloaded && alertState.overload) {
-      notifications.push(`✅ ${device.name}: daya kembali normal: ${num(data.power, 0)} W (batas ${num(data.limit, 0)} W)`);
+      notifications.push(`✅ Daya kembali normal: ${num(data.power, 0)} W (batas ${num(data.limit, 0)} W)`);
       newState.overload = false;
       changed = true;
     }
   }
 
   for (const text of notifications) {
-    await notifyAll(chatIds, text);
+    try { await sendTelegramMessage(chatId, text); } catch (err) { console.error("sendTelegramMessage failed:", err); }
   }
 
   if (changed) {
-    try { await publishAndWait(topics.alertState, JSON.stringify(newState), { retain: true }); }
+    try { await publishAndWait(TOPIC_ALERT_STATE, JSON.stringify(newState), { retain: true }); }
     catch (err) { console.error("Failed to save alert state:", err); }
   }
 
-  try { await checkSummaries(chatIds, device.name, nowWIB(), dailyData, weeklyData, values[topics.summaryState], topics.summaryState); }
+  try { await checkSummaries(chatId, nowWIB(), dailyData, weeklyData, values[TOPIC_SUMMARY_STATE]); }
   catch (err) { console.error("checkSummaries failed:", err); }
 
-  try { await checkReminder(chatIds, nowWIB(), values[topics.reminder], values[topics.reminderState], topics.reminderState); }
+  try { await checkReminder(chatId, nowWIB(), values[TOPIC_REMINDER], values[TOPIC_REMINDER_STATE]); }
   catch (err) { console.error("checkReminder failed:", err); }
 
-  return { deviceId: device.id, isOffline, notifications: notifications.length };
-}
-
-module.exports = async (req, res) => {
-  let client;
-  try {
-    client = getSupabase();
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
-    return;
-  }
-
-  const { data: devices, error } = await client.from("devices").select("*");
-  if (error) {
-    res.status(500).json({ ok: false, error: error.message });
-    return;
-  }
-
-  const results = [];
-  for (const device of devices) {
-    const { data: links } = await client
-      .from("telegram_links")
-      .select("chat_id")
-      .eq("user_id", device.owner_user_id);
-    const chatIds = (links || []).map((l) => l.chat_id);
-
-    try {
-      results.push(await processDevice(device, chatIds));
-    } catch (err) {
-      console.error(`processDevice failed for ${device.id}:`, err);
-      results.push({ deviceId: device.id, error: err.message });
-    }
-  }
-
-  res.status(200).json({ ok: true, devices: results });
+  res.status(200).json({ ok: true, isOffline, notifications: notifications.length });
 };

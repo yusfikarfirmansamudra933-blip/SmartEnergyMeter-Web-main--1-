@@ -12,7 +12,7 @@
 
 // Bumped manually on each release so /api/status and the OTA panel can show
 // which build is currently running (useful to confirm an update took effect).
-#define FIRMWARE_VERSION "1.6.1"
+#define FIRMWARE_VERSION "1.7.0"
 
 /*==============================
         OLED
@@ -59,13 +59,6 @@
 
 #ifndef WIFI_PASSWORD
 #define WIFI_PASSWORD ""
-#endif
-
-// Empty by default (auto MAC-based id, see getDeviceId() in wifiManager.cpp).
-// Override in config.local.h to match an id already registered on the web
-// dashboard, e.g. #define DEVICE_ID "meter-01"
-#ifndef DEVICE_ID
-#define DEVICE_ID ""
 #endif
 
 #ifndef MQTT_HOST

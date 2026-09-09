@@ -9,10 +9,8 @@ const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
 // reads the SAME data, instead of each one tracking its own copy in
 // localStorage (which meant your bill history didn't follow you between
 // devices).
-// See script.js's DEVICE_ID comment — same stopgap, single hardcoded device.
-const DEVICE_ID = "meter-01";
-const TOPIC_BILLING_DAILY = `smartmeter/${DEVICE_ID}/billing/daily`;
-const TOPIC_BILLING_WEEKLY = `smartmeter/${DEVICE_ID}/billing/weekly`;
+const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
+const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
 
 const $ = (id) => document.getElementById(id);
 const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
