@@ -168,8 +168,22 @@ const COMMANDS = {
   limit: (data) => `🎚️ Batas daya saat ini: ${num(data.limit, 0)} Watt`,
 };
 
+// Tap-friendly menu for users who'd rather not memorise command names.
+// callback_data is what comes back when a button is pressed — Telegram caps
+// it at 64 bytes, and these are reused verbatim as "/<data>" so every button
+// resolves through the exact same dispatch path as a typed command.
+const MENU_KEYBOARD = {
+  inline_keyboard: [
+    [{ text: "⚡ Daya", callback_data: "watt" }, { text: "🔋 Energi", callback_data: "kwh" }],
+    [{ text: "🔌 Tegangan", callback_data: "volt" }, { text: "🔀 Arus", callback_data: "ampere" }],
+    [{ text: "🌡️ Suhu", callback_data: "suhu" }, { text: "📐 Power Factor", callback_data: "pf" }],
+    [{ text: "📊 Status Lengkap", callback_data: "status" }, { text: "🎚️ Batas Daya", callback_data: "limit" }],
+    [{ text: "📈 Riwayat 7 Hari", callback_data: "riwayat" }, { text: "🔔 Pengingat", callback_data: "reminder" }],
+  ],
+};
+
 const HELP_TEXT = [
-  "Halo! Saya bot Smart Energy Meter. Perintah yang tersedia:",
+  "Halo! Saya bot Smart Energy Meter. Tekan tombol di bawah, atau ketik perintah:",
   "/watt - daya saat ini (Watt)",
   "/kwh - energi terpakai (kWh)",
   "/volt - tegangan (Volt)",
@@ -184,6 +198,7 @@ const HELP_TEXT = [
   "/reminder <tanggal> <pesan> - pengingat bayar listrik tiap bulan, contoh: /reminder 25 Jangan lupa bayar listrik!",
   "/reminder - lihat pengingat yang aktif",
   "/reminder off - matikan pengingat",
+  "/menu - tampilkan tombol menu ini lagi",
   "",
   "Kirim /start sekali supaya saya bisa kirim notifikasi otomatis (offline / kelebihan batas daya).",
   "Atau tanya bebas juga bisa, misalnya \"berapa watt sekarang\".",
@@ -290,20 +305,39 @@ function formatReply(text, data) {
     : 'Maaf, saya belum paham. Coba "/status" atau "/help" untuk lihat daftar perintah.';
 }
 
-async function sendTelegramMessage(chatId, text) {
+async function sendTelegramMessage(chatId, text, replyMarkup) {
+  const body = { chat_id: chatId, text };
+  if (replyMarkup) body.reply_markup = replyMarkup;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, text }),
+    body: JSON.stringify(body),
   });
 }
 
-async function sendTelegramPhoto(chatId, photoUrl, caption) {
+async function sendTelegramPhoto(chatId, photoUrl, caption, replyMarkup) {
+  const body = { chat_id: chatId, photo: photoUrl, caption };
+  if (replyMarkup) body.reply_markup = replyMarkup;
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendPhoto`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ chat_id: chatId, photo: photoUrl, caption }),
+    body: JSON.stringify(body),
   });
+}
+
+// Clears the loading spinner Telegram shows on a tapped button. It gives us
+// only a few seconds to respond, so this fires before the slower MQTT
+// round-trip — and a failure here must never block the actual reply.
+async function answerCallbackQuery(callbackQueryId) {
+  try {
+    await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/answerCallbackQuery`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ callback_query_id: callbackQueryId }),
+    });
+  } catch (err) {
+    console.error("Failed to answer callback query:", err);
+  }
 }
 
 async function handleSetLimit(arg) {
@@ -319,54 +353,69 @@ async function handleSetLimit(arg) {
   }
 }
 
+// Shared by typed messages and inline-button taps — a button press arrives as
+// "/<callback_data>", so both end up going through the same dispatch.
+async function resolveReply(text) {
+  const parsed = parseCommand(text);
+  const command = parsed ? parsed.command : null;
+
+  if (command === "start" || command === "help" || command === "menu" || /bantuan|^menu$/i.test(text.trim())) {
+    return { text: HELP_TEXT, keyboard: MENU_KEYBOARD };
+  }
+  if (command === "setlimit") {
+    return { text: await handleSetLimit(parsed.arg) };
+  }
+  if (command === "riwayat" || command === "history") {
+    const result = await handleHistory();
+    return { text: result.text, photoUrl: result.photoUrl };
+  }
+  if (command === "reminder" || command === "pengingat") {
+    return { text: await handleReminder(parsed.arg) };
+  }
+
+  try {
+    const { status, data } = await fetchDeviceState();
+    if (status !== "online" || !data) {
+      return { text: "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan." };
+    }
+    return { text: formatReply(text, data) };
+  } catch {
+    return { text: "⚠️ Perangkat sedang offline atau data belum tersedia. Coba lagi nanti." };
+  }
+}
+
 module.exports = async (req, res) => {
   if (req.method !== "POST") {
     res.status(200).send("Telegram bot webhook is running.");
     return;
   }
 
-  const message = req.body && req.body.message;
-  if (!message || !message.text) {
+  const body = req.body || {};
+  const callback = body.callback_query;
+  // A button tap has no text of its own — its command lives in callback_data,
+  // and the chat it belongs to is the one the bot's own message was sent to.
+  const message = callback ? callback.message : body.message;
+  const text = callback ? `/${callback.data}` : (body.message && body.message.text);
+
+  if (!message || !text) {
     res.status(200).json({ ok: true });
     return;
   }
 
   const chatId = message.chat.id;
-  const text = message.text;
-  const parsed = parseCommand(text);
-  const command = parsed ? parsed.command : null;
-  const isHelp = command === "start" || command === "help" || /bantuan|^menu$/i.test(text.trim());
-
   await saveChatId(chatId);
 
-  let reply;
-  let photoReply = null;
-  if (isHelp) {
-    reply = HELP_TEXT;
-  } else if (command === "setlimit") {
-    reply = await handleSetLimit(parsed.arg);
-  } else if (command === "riwayat" || command === "history") {
-    const result = await handleHistory();
-    if (result.photoUrl) photoReply = { url: result.photoUrl, caption: result.text };
-    else reply = result.text;
-  } else if (command === "reminder" || command === "pengingat") {
-    reply = await handleReminder(parsed.arg);
-  } else {
-    try {
-      const { status, data } = await fetchDeviceState();
-      if (status !== "online" || !data) {
-        reply = "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan.";
-      } else {
-        reply = formatReply(text, data);
-      }
-    } catch {
-      reply = "⚠️ Perangkat sedang offline atau data belum tersedia. Coba lagi nanti.";
-    }
-  }
+  if (callback) await answerCallbackQuery(callback.id);
+
+  const reply = await resolveReply(text);
+  // Keep the menu attached whenever the user is already in the tap flow, so
+  // they never have to fall back to typing to ask the next thing. Typed
+  // commands keep their plain replies.
+  const keyboard = reply.keyboard || (callback ? MENU_KEYBOARD : undefined);
 
   try {
-    if (photoReply) await sendTelegramPhoto(chatId, photoReply.url, photoReply.caption);
-    else await sendTelegramMessage(chatId, reply);
+    if (reply.photoUrl) await sendTelegramPhoto(chatId, reply.photoUrl, reply.text, keyboard);
+    else await sendTelegramMessage(chatId, reply.text, keyboard);
   } catch (err) {
     console.error("Failed to send Telegram message:", err);
   }

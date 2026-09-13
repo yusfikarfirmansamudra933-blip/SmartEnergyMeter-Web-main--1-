@@ -110,6 +110,8 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 ### Command bot Telegram
 
+**Menu tombol:** kirim `/start`, `/help`, atau `/menu` — bot membalas dengan tombol yang bisa langsung ditekan (Daya, Energi, Tegangan, Arus, Suhu, Power Factor, Status Lengkap, Batas Daya, Riwayat, Pengingat), jadi tidak perlu hafal nama command. Setiap kali tombol ditekan, menu ikut terkirim lagi bersama jawabannya supaya bisa lanjut menekan tombol berikutnya. Command ketik tetap jalan seperti biasa.
+
 `/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/limit` `/status` — cek data (`/suhu` untuk suhu & kelembapan dari DHT22). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
 
 ## Catatan keamanan
