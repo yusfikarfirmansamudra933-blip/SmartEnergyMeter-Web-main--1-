@@ -22,7 +22,7 @@ AsyncWebSocket webSocket("/ws");
 
 String createStatusJson()
 {
-    StaticJsonDocument<512> document;
+    StaticJsonDocument<768> document;
     document["voltage"] = voltage;
     document["current"] = current;
     document["power"] = power;
@@ -35,6 +35,9 @@ String createStatusJson()
     document["limit"] = powerLimit;
     document["wifi"] = wifiConnected();
     document["sensor"] = sensorOnline;
+    document["temperature"] = temperature;
+    document["humidity"] = humidity;
+    document["dht"] = dhtOnline;
     document["ip"] = getIPAddress();
     document["version"] = FIRMWARE_VERSION;
 

@@ -15,12 +15,17 @@ float powerLimit = 700;
 bool overload = false;
 bool sensorOnline = false;
 
+float temperature = 0;
+float humidity = 0;
+bool dhtOnline = false;
+
 uint32_t pzemReadCount = 0;
 uint32_t pzemErrorCount = 0;
 
 uint8_t signalQuality = 100;
 
 unsigned long sensorTimer = 0;
+unsigned long dhtTimer = 0;
 unsigned long oledTimer = 0;
 
 int powerPercent = 0;

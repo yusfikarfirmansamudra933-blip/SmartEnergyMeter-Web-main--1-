@@ -140,9 +140,11 @@ function statusText(data) {
     `Frekuensi: ${num(data.frequency, 1)} Hz`,
     `Power factor: ${num(data.pf, 2)}`,
     `Batas daya: ${num(data.limit, 0)} W`,
+    data.dht ? `Suhu: ${num(data.temperature, 1)} °C` : null,
+    data.dht ? `Kelembapan: ${num(data.humidity, 0)} %` : null,
     `Sensor PZEM: ${data.sensor ? "Online" : "Tidak terdeteksi"}`,
     `WiFi perangkat: ${data.wifi ? "Terhubung" : "Terputus"}`,
-  ].join("\n");
+  ].filter(Boolean).join("\n");
 }
 
 // Command -> reply. Registered with @BotFather so they show up in
@@ -160,6 +162,8 @@ const COMMANDS = {
   hz: (data) => `📶 Frekuensi: ${num(data.frequency, 1)} Hz`,
   pf: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
   powerfactor: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
+  suhu: (data) => (data.dht ? `🌡️ Suhu: ${num(data.temperature, 1)} °C | Kelembapan: ${num(data.humidity, 0)} %` : "🌡️ Sensor DHT22 belum terpasang/terbaca."),
+  temp: (data) => COMMANDS.suhu(data),
   status: statusText,
   limit: (data) => `🎚️ Batas daya saat ini: ${num(data.limit, 0)} Watt`,
 };
@@ -172,6 +176,7 @@ const HELP_TEXT = [
   "/ampere - arus (Ampere)",
   "/frekuensi - frekuensi (Hz)",
   "/pf - power factor",
+  "/suhu - suhu & kelembapan ruangan (DHT22)",
   "/limit - lihat batas daya saat ini",
   "/setlimit <angka> - ubah batas daya, contoh: /setlimit 500",
   "/status - semua data sekaligus",
@@ -276,6 +281,7 @@ function formatReply(text, data) {
   if (/ampere|\barus\b/.test(t)) return COMMANDS.arus(data);
   if (/frekuensi|\bhz\b/.test(t)) return COMMANDS.frekuensi(data);
   if (/power ?factor|\bpf\b|faktor daya/.test(t)) return COMMANDS.pf(data);
+  if (/suhu|temperatur|kelembapan|humid/.test(t)) return COMMANDS.suhu(data);
   if (/batas|limit/.test(t)) return COMMANDS.limit(data);
   if (/status|semua|kondisi|\bcek\b/.test(t)) return COMMANDS.status(data);
 

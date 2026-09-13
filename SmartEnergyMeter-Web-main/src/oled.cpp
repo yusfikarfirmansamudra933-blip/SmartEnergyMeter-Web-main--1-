@@ -170,6 +170,27 @@ display.print(WiFi.localIP());
 
 }
 
+void page5()
+{
+
+drawHeader("Environment");
+
+display.setCursor(0,12);
+
+if(dhtOnline)
+display.printf("Temp: %.1fC",temperature);
+else
+display.print("Temp: N/A");
+
+display.setCursor(0,23);
+
+if(dhtOnline)
+display.printf("Hum : %.1f%%",humidity);
+else
+display.print("Hum : N/A");
+
+}
+
 // Fast, non-blocking: only sets state. Safe to call from the OTA upload
 // handler's task. The actual I2C drawing happens in oledLoop() instead.
 void oledOtaProgress(uint8_t percent)
@@ -316,7 +337,7 @@ pageMillis=millis();
 
 page++;
 
-if(page>3)
+if(page>4)
 page=0;
 
 }
@@ -347,6 +368,12 @@ break;
 case 3:
 
 page4();
+
+break;
+
+case 4:
+
+page5();
 
 break;
 

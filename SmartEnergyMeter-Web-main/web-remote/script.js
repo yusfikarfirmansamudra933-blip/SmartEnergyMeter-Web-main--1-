@@ -18,7 +18,7 @@ const CIRC_SMALL = 2 * Math.PI * 40;
 const maxPoints = 40;
 
 const $ = id => document.getElementById(id);
-const meter = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, pf: 0, va: 0, var: 0, limit: 0, wifi: false, sensor: false, trip: false };
+const meter = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, pf: 0, va: 0, var: 0, limit: 0, wifi: false, sensor: false, trip: false, temperature: 0, humidity: 0, dht: false };
 const powerValues = [], voltageValues = [], currentValues = [];
 const chartState = { metric: "power" };
 let client;
@@ -51,9 +51,9 @@ function setBadge(id, text, state, baseClass) {
 // walau perangkat sudah mati — kosongkan tampilan saat status bukan "online"
 // supaya tidak terlihat seolah masih data langsung.
 function clearMetricsDisplay() {
-  ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var"].forEach((id) => setText(id, "-"));
+  ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var", "metric-temp", "metric-hum"].forEach((id) => setText(id, "-"));
   ["watt-percent-label", "metric-limit", "metric-remaining", "watt-percent-small", "pf-label"].forEach((id) => setText(id, "-"));
-  ["gauge-watt", "gauge-kwh", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
+  ["gauge-watt", "gauge-kwh", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-temp", "gauge-hum"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
   setBadge("loadStatusBadge", "Offline", "bad", "px-2 py-0.5 rounded-full font-label-telemetry text-label-telemetry uppercase tracking-wider");
   setBadge("sensorStatusBadge", "Tidak diketahui", "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
   setText("fps", "Perangkat offline");
@@ -124,6 +124,14 @@ function updateDashboard() {
   const maxVar = Math.max(limit * 0.5, 1);
   setText("metric-var", Math.round(number(meter.var)));
   setGauge("gauge-var", CIRC_SMALL, rangePercent(meter.var, 0, maxVar));
+
+  // DHT22 belum tentu terpasang di semua unit — tampilkan "-" bukan 0.0
+  // supaya tidak terlihat seperti pembacaan valid saat sensornya memang absen.
+  setText("metric-temp", meter.dht ? format(meter.temperature, 1) : "-");
+  setGauge("gauge-temp", CIRC_SMALL, meter.dht ? rangePercent(meter.temperature, 15, 45) : 0);
+
+  setText("metric-hum", meter.dht ? format(meter.humidity, 0) : "-");
+  setGauge("gauge-hum", CIRC_SMALL, meter.dht ? clampPercent(number(meter.humidity)) : 0);
 
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
 }

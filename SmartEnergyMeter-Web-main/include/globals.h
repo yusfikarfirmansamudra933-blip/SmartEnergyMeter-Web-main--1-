@@ -19,6 +19,10 @@ extern bool overload;
 
 extern bool sensorOnline;
 
+extern float temperature;
+extern float humidity;
+extern bool dhtOnline;
+
 extern uint32_t pzemReadCount;
 
 extern uint32_t pzemErrorCount;
@@ -26,6 +30,8 @@ extern uint32_t pzemErrorCount;
 extern uint8_t signalQuality;
 
 extern unsigned long sensorTimer;
+
+extern unsigned long dhtTimer;
 
 extern unsigned long oledTimer;
 

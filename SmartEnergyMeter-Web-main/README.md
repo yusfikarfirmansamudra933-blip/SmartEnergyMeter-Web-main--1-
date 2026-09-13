@@ -1,6 +1,6 @@
 # Smart Energy Meter
 
-Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T, dengan dashboard lokal, dashboard cloud, dan bot Telegram — semuanya terhubung lewat broker MQTT.
+Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suhu & kelembapan ruangan lewat DHT22), dengan dashboard lokal, dashboard cloud, dan bot Telegram — semuanya terhubung lewat broker MQTT.
 
 ## Arsitektur
 
@@ -8,8 +8,10 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T, dengan d
 ┌─────────────┐   UART    ┌──────────────┐   MQTT (TLS)   ┌────────────────┐
 │ PZEM-004T   ├──────────►│   ESP32      ├───────────────►│  EMQX Cloud     │
 │ (sensor AC) │           │  (firmware)  │                │  (broker MQTT)  │
-└─────────────┘           └──────┬───────┘                └────────┬────────┘
-                                  │ HTTP/WS (LAN saja)               │ MQTT over WebSocket
+├─────────────┤  1-wire   │              │                └────────┬────────┘
+│ DHT22       ├──────────►│              │                         │
+│ (suhu/RH)   │           └──────┬───────┘                         │
+└─────────────┘                  │ HTTP/WS (LAN saja)               │ MQTT over WebSocket
                                   ▼                                  ▼
                           Dashboard lokal                 ┌──────────────────────┐
                           (LittleFS, data/)                │ Vercel (web-remote/) │
@@ -19,7 +21,7 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T, dengan d
                                                             └──────────────────────┘
 ```
 
-- **Firmware ESP32** membaca data dari PZEM-004T, menampilkannya di OLED, menyajikan dashboard lokal via HTTP/WebSocket, dan mem-publish telemetri ke broker MQTT (retained + status online/offline lewat Last Will).
+- **Firmware ESP32** membaca data dari PZEM-004T dan DHT22, menampilkannya di OLED, menyajikan dashboard lokal via HTTP/WebSocket, dan mem-publish telemetri ke broker MQTT (retained + status online/offline lewat Last Will).
 - **Dashboard lokal** (`data/`) hanya bisa diakses dari jaringan WiFi yang sama dengan perangkat. Bisa untuk kontrol penuh (restart, factory reset, update firmware OTA).
 - **Dashboard cloud** (`web-remote/`) di-deploy ke Vercel, bisa diakses dari mana saja lewat internet karena mengambil data langsung dari broker MQTT (bukan dari perangkat). Menggunakan kredensial MQTT read-only demi keamanan.
 - **Bot Telegram** (juga di `web-remote/api/`) menjawab pertanyaan data (`/watt`, `/kwh`, dll), bisa mengubah batas daya (`/setlimit`), dan mengirim notifikasi otomatis saat perangkat offline atau daya melebihi batas.
@@ -29,7 +31,8 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T, dengan d
 1. Salin `include/config.example.h` menjadi `include/config.local.h`.
 2. Isi kredensial WiFi dan MQTT milik Anda sendiri. File lokal ini diabaikan Git.
 3. Isi sertifikat CA broker pada `MQTT_CA_CERT` (lihat catatan format di bawah). Jangan gunakan `MQTT_TLS_INSECURE` di perangkat produksi.
-4. Build dan unggah firmware serta filesystem dengan PlatformIO:
+4. Pasang sensor DHT22 (opsional, tapi sudah didukung firmware): pin **VCC → 3.3V**, **GND → GND**, **DATA → GPIO4** (`DHT_PIN` di `include/config.h`, bisa diganti kalau GPIO4 dipakai untuk yang lain). Kalau modul DHT22 yang dipakai cuma 3 pin (tanpa breakout board), tambahkan resistor pull-up 10kΩ antara VCC dan DATA — modul breakout kebanyakan sudah punya ini terpasang di board-nya. Kalau sensor belum dipasang, firmware tetap jalan normal; dashboard cukup menampilkan "-" untuk suhu/kelembapan.
+5. Build dan unggah firmware serta filesystem dengan PlatformIO:
 
    ```sh
    pio run -t upload
@@ -79,7 +82,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 | Topic | Arah | Isi |
 |---|---|---|
-| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, dll), **retained** |
+| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, temperature, humidity, dll), **retained** |
 | `smartmeter/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
 | `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
 | `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
@@ -107,7 +110,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 ### Command bot Telegram
 
-`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/limit` `/status` — cek data. `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
+`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/limit` `/status` — cek data (`/suhu` untuk suhu & kelembapan dari DHT22). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
 
 ## Catatan keamanan
 

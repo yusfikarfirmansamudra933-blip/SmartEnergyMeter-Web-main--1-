@@ -8,6 +8,7 @@
 #include "storage.h"
 #include "oled.h"
 #include "pzem.h"
+#include "dhtSensor.h"
 #include "wifiManager.h"
 #include "webServer.h"
 #include "mqtt.h"
@@ -18,6 +19,11 @@ namespace {
 // synchronously, before mqttBegin()/webServerBegin() even start — if we're
 // about to roll back anyway there's no point spinning those up first.
 constexpr unsigned long OTA_VERIFY_TIMEOUT_MS = 20000;
+
+// DHT22 only refreshes internally every ~2s; polling faster just re-reads
+// the same stale value (or returns NaN), unlike the PZEM which is happy at
+// SENSOR_INTERVAL.
+constexpr unsigned long DHT_READ_INTERVAL_MS = 2500;
 
 void verifyOtaOrRollBack()
 {
@@ -77,6 +83,7 @@ void setup()
 
 
     pzemBegin();
+    dhtSensorBegin();
     wifiBegin();
 
     verifyOtaOrRollBack();
@@ -110,6 +117,13 @@ void loop()
             pf
         );
     }
+
+    if (millis() - dhtTimer >= DHT_READ_INTERVAL_MS)
+    {
+        dhtTimer = millis();
+        readDHTSensor();
+    }
+
     mqttPublish();
 
     wifiLoop();

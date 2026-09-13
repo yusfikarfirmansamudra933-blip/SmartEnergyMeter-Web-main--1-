@@ -184,7 +184,7 @@ void mqttPublish()
 
     lastPublish = millis();
 
-    StaticJsonDocument<512> doc;
+    StaticJsonDocument<768> doc;
 
     // Data PZEM
     doc["voltage"] = voltage;
@@ -205,6 +205,11 @@ void mqttPublish()
     doc["wifi"] = (WiFi.status() == WL_CONNECTED);
     doc["sensor"] = sensorOnline;
     doc["trip"] = overload;
+
+    // Suhu & kelembapan (DHT22)
+    doc["temperature"] = temperature;
+    doc["humidity"] = humidity;
+    doc["dht"] = dhtOnline;
 
     String json;
 
