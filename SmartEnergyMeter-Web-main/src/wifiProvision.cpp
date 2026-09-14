@@ -38,6 +38,13 @@ DNSServer dnsServer;
 AsyncWebServer portalServer(PORTAL_PORT);
 volatile bool provisioned = false;
 
+// Filled once by scanNetworksJson(), called from wifiProvisionBegin() on the
+// main task — NOT from inside handleScan(). AsyncWebServer handlers run on
+// the AsyncTCP task, which has a much smaller stack than the main task;
+// WiFi.scanNetworks() needs more than that task has, and calling it from
+// there crashed the device instead of returning a result.
+String cachedScanJson = "[]";
+
 const char PORTAL_HTML[] PROGMEM = R"HTML(<!DOCTYPE html>
 <html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Setup Smart Energy Meter</title>
@@ -84,8 +91,9 @@ function connect(){
 </script></body></html>
 )HTML";
 
-// WiFi.scanNetworks() is blocking, which is fine here — the whole portal is
-// already a blocking detour taken before the rest of setup() runs.
+// Blocking, which is fine — called once from wifiProvisionBegin() on the
+// main task, before the portal server even starts, same as the OTA-verify
+// and other blocking waits already in main.cpp.
 String scanNetworksJson()
 {
     const int n = WiFi.scanNetworks();
@@ -125,7 +133,7 @@ String scanNetworksJson()
 
 void handleScan(AsyncWebServerRequest *request)
 {
-    request->send(200, "application/json", scanNetworksJson());
+    request->send(200, "application/json", cachedScanJson);
 }
 
 void handleConnect(AsyncWebServerRequest *request)
@@ -199,6 +207,12 @@ void wifiProvisionBegin()
     // as a station in the background.
     WiFi.mode(WIFI_AP_STA);
     WiFi.softAP(AP_SSID, apPassword);
+
+    // Scan once, up front, on the main task — see the cachedScanJson comment
+    // above for why this can't happen inside handleScan() instead. Briefly
+    // pauses the AP's own beacon while it hops channels (normal ESP32
+    // behavior for a concurrent AP+STA scan); it doesn't drop the AP.
+    cachedScanJson = scanNetworksJson();
 
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 
