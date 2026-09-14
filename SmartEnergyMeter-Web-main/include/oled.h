@@ -25,4 +25,9 @@ void oledOtaResult(bool success);
 // there's nothing else contending for the display yet).
 void oledOtaVerifyScreen(const char *status);
 
+// Same rule as oledOtaVerifyScreen() — draws immediately, only safe to call
+// from setup() before the normal loop is reachable. Shown for as long as
+// wifiProvisionBegin() blocks waiting for the user to finish setup.
+void oledShowProvisioning();
+
 #endif

@@ -29,7 +29,7 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 ## Menyiapkan firmware
 
 1. Salin `include/config.example.h` menjadi `include/config.local.h`.
-2. Isi kredensial WiFi dan MQTT milik Anda sendiri. File lokal ini diabaikan Git.
+2. Isi kredensial MQTT milik Anda sendiri. File lokal ini diabaikan Git. **`WIFI_SSID`/`WIFI_PASSWORD` boleh dikosongkan** — device baru akan otomatis masuk mode setup WiFi lewat browser saat pertama nyala, lihat bagian "Setup WiFi pertama kali" di bawah. Isi keduanya hanya kalau Anda ingin WiFi sudah langsung tersambung tanpa perlu setup manual (misal untuk testing cepat di meja).
 3. Isi sertifikat CA broker pada `MQTT_CA_CERT` (lihat catatan format di bawah). Jangan gunakan `MQTT_TLS_INSECURE` di perangkat produksi.
 4. Pasang sensor DHT22 (opsional, tapi sudah didukung firmware): pin **VCC → 3.3V**, **GND → GND**, **DATA → GPIO4** (`DHT_PIN` di `include/config.h`, bisa diganti kalau GPIO4 dipakai untuk yang lain). Kalau modul DHT22 yang dipakai cuma 3 pin (tanpa breakout board), tambahkan resistor pull-up 10kΩ antara VCC dan DATA — modul breakout kebanyakan sudah punya ini terpasang di board-nya. Kalau sensor belum dipasang, firmware tetap jalan normal; dashboard cukup menampilkan "-" untuk suhu/kelembapan.
 5. Build dan unggah firmware serta filesystem dengan PlatformIO:
@@ -42,6 +42,21 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 `data/` adalah aset dashboard lokal yang dipasang ke LittleFS.
 
 > **Catatan format `MQTT_CA_CERT`:** compiler ESP32 di proyek ini tidak mendukung raw string literal (`R"EOF(...)EOF"`) multi-baris di dalam macro `#define`. Sertifikat harus ditulis sebagai concatenated string literals dengan `\n` eksplisit dan backslash continuation di akhir tiap baris — lihat contoh di `config.example.h`.
+
+## Setup WiFi pertama kali (lewat browser, tanpa colok laptop)
+
+Device tidak perlu tahu WiFi rumah Anda sebelum di-flash. Kalau belum ada WiFi yang tersimpan (device baru, atau `WIFI_SSID` dikosongkan di `config.local.h`), begitu dinyalakan device otomatis membuka mode setup:
+
+1. OLED menampilkan "Setup WiFi — Sambung ke WiFi: SmartMeter-Setup".
+2. Dari HP/laptop, sambungkan ke WiFi bernama **`SmartMeter-Setup`** (terbuka, tanpa password).
+3. Browser biasanya otomatis membuka halaman setup sendiri (seperti WiFi kafe/hotel). Kalau tidak, buka `http://192.168.4.1` manual.
+4. Pilih nama WiFi rumah Anda dari daftar (device otomatis scan), isi passwordnya, klik **Sambungkan**.
+5. Kalau berhasil, device restart otomatis dan langsung tersambung ke WiFi itu setiap kali nyala berikutnya — tidak perlu setup ulang.
+6. Kalau gagal (password salah/sinyal lemah), halaman tetap terbuka untuk dicoba lagi.
+
+WiFi yang tersimpan lewat cara ini disimpan di memori device (NVS), **lebih diutamakan** daripada `WIFI_SSID`/`WIFI_PASSWORD` di `config.local.h` — jadi aman walau firmware nanti di-update ulang tanpa WiFi dikompilasi ke dalamnya.
+
+**Mau ganti WiFi nanti** (pindah rumah, ganti router)? Tekan dan **tahan tombol BOOT** di board ESP32 selama ±2 detik saat/sesaat setelah dinyalakan — device akan masuk mode setup lagi tanpa menghapus data lain (batas daya, dll). Factory reset (`/factoryReset` di dashboard lokal atau lewat MQTT) juga ikut menghapus WiFi tersimpan sebagai bagian dari reset total.
 
 ## Update firmware OTA
 

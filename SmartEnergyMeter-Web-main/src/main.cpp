@@ -10,6 +10,7 @@
 #include "pzem.h"
 #include "dhtSensor.h"
 #include "wifiManager.h"
+#include "wifiProvision.h"
 #include "webServer.h"
 #include "mqtt.h"
 
@@ -24,6 +25,38 @@ constexpr unsigned long OTA_VERIFY_TIMEOUT_MS = 20000;
 // the same stale value (or returns NaN), unlike the PZEM which is happy at
 // SENSOR_INTERVAL.
 constexpr unsigned long DHT_READ_INTERVAL_MS = 2500;
+
+// GPIO0 is the "BOOT" button already on every ESP32 dev board — no extra
+// wiring needed. The bootloader only cares about its state for a moment at
+// power-on; by the time app code runs it's a plain input we're free to
+// read like any other button.
+constexpr uint8_t PROVISION_BUTTON_PIN = 0;
+constexpr unsigned long PROVISION_HOLD_MS = 2000;
+
+// True only if the button was already held at boot AND stayed held for the
+// full PROVISION_HOLD_MS — a quick accidental bump during power-on isn't
+// enough to drop a working WiFi setup back into the setup portal.
+bool provisionButtonHeld()
+{
+    pinMode(PROVISION_BUTTON_PIN, INPUT_PULLUP);
+
+    if (digitalRead(PROVISION_BUTTON_PIN) != LOW)
+    {
+        return false;
+    }
+
+    const unsigned long start = millis();
+    while (digitalRead(PROVISION_BUTTON_PIN) == LOW)
+    {
+        if (millis() - start >= PROVISION_HOLD_MS)
+        {
+            return true;
+        }
+        delay(20);
+    }
+
+    return false;
+}
 
 void verifyOtaOrRollBack()
 {
@@ -81,6 +114,15 @@ void setup()
 
     oledBegin();
 
+    // Checked before anything else touches WiFi: either the button is being
+    // held right now (user wants to reconfigure), or nothing usable is
+    // configured at all (brand new device, nothing in NVS, nothing compiled
+    // into config.local.h). Either way wifiProvisionBegin() blocks here and
+    // restarts the device itself once done — it never returns normally.
+    if (provisionButtonHeld() || (!hasStoredWifiCredentials() && strlen(WIFI_SSID) == 0))
+    {
+        wifiProvisionBegin();
+    }
 
     pzemBegin();
     dhtSensorBegin();

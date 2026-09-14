@@ -63,3 +63,24 @@ void clearOtaPendingVerify()
 {
     preferences.putBool("otaPending", false);
 }
+
+bool hasStoredWifiCredentials()
+{
+    return preferences.getString("wifiSsid", "").length() > 0;
+}
+
+String getStoredWifiSsid()
+{
+    return preferences.getString("wifiSsid", "");
+}
+
+String getStoredWifiPassword()
+{
+    return preferences.getString("wifiPass", "");
+}
+
+void saveWifiCredentials(const String &ssid, const String &password)
+{
+    preferences.putString("wifiSsid", ssid);
+    preferences.putString("wifiPass", password);
+}

@@ -285,6 +285,27 @@ display.display();
 
 }
 
+void oledShowProvisioning()
+{
+
+display.clearDisplay();
+
+display.setTextSize(1);
+
+drawHeader("Setup WiFi");
+
+display.setCursor(0,12);
+
+display.print("Sambung ke WiFi:");
+
+display.setCursor(0,23);
+
+display.print("SmartMeter-Setup");
+
+display.display();
+
+}
+
 void oledLoop()
 {
 

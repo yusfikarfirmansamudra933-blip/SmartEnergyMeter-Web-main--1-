@@ -4,10 +4,18 @@
 #include <cstring>
 
 #include "config.h"
+#include "storage.h"
 
 namespace {
 constexpr unsigned long RECONNECT_INTERVAL_MS = 5000;
 unsigned long reconnectMillis = 0;
+
+// Credentials saved through the setup portal (wifiProvision.cpp) always win
+// over the compiled config.local.h defaults — that lets a device provisioned
+// over WiFi keep working even if it's later reflashed with a build that has
+// no WIFI_SSID compiled in at all.
+String activeSsid;
+String activePassword;
 }
 
 void wifiBegin()
@@ -16,13 +24,24 @@ void wifiBegin()
 
     WiFi.setAutoReconnect(true);
 
-    if (strlen(WIFI_SSID) == 0)
+    if (hasStoredWifiCredentials())
+    {
+        activeSsid = getStoredWifiSsid();
+        activePassword = getStoredWifiPassword();
+    }
+    else if (strlen(WIFI_SSID) > 0)
+    {
+        activeSsid = WIFI_SSID;
+        activePassword = WIFI_PASSWORD;
+    }
+
+    if (activeSsid.length() == 0)
     {
         Serial.println("WiFi credentials are not configured");
         return;
     }
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(activeSsid.c_str(), activePassword.c_str());
     Serial.println("Connecting to WiFi");
 
 }
@@ -44,16 +63,16 @@ void wifiLoop()
 
     ipPrinted = false;
 
-    if (strlen(WIFI_SSID) == 0 || millis() - reconnectMillis < RECONNECT_INTERVAL_MS)
+    if (activeSsid.length() == 0 || millis() - reconnectMillis < RECONNECT_INTERVAL_MS)
         return;
 
     reconnectMillis=millis();
 
-    Serial.printf("Reconnect WiFi (status=%d, ssid=\"%s\")\n", WiFi.status(), WIFI_SSID);
+    Serial.printf("Reconnect WiFi (status=%d, ssid=\"%s\")\n", WiFi.status(), activeSsid.c_str());
 
     WiFi.disconnect();
 
-    WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+    WiFi.begin(activeSsid.c_str(), activePassword.c_str());
 
 }
 
