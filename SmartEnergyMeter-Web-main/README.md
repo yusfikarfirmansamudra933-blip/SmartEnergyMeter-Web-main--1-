@@ -47,16 +47,16 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 
 Device tidak perlu tahu WiFi rumah Anda sebelum di-flash. Kalau belum ada WiFi yang tersimpan (device baru, atau `WIFI_SSID` dikosongkan di `config.local.h`), begitu dinyalakan device otomatis membuka mode setup:
 
-1. OLED menampilkan nama WiFi setup (`SmartMeter-Setup`) dan **PIN 8 digit acak** — PIN ini dibuat baru setiap kali masuk mode setup dan cuma tampil di layar device, jadi cuma orang yang benar-benar berdiri di depan alatnya yang bisa lihat dan menyambung.
+1. OLED menampilkan nama WiFi setup (`SmartMeter-Setup`) dan **PIN 8 digit acak** — PIN ini dibuat baru setiap kali masuk mode setup dan cuma tampil di layar device, jadi cuma orang yang benar-benar berdiri di depan alatnya yang bisa lihat dan menyambung. Device butuh beberapa detik memindai WiFi sekitar dulu sebelum `SmartMeter-Setup` benar-benar bisa disambung — kalau belum kelihatan di daftar WiFi HP, tunggu sebentar lalu refresh.
 2. Dari HP/laptop, sambungkan ke WiFi bernama **`SmartMeter-Setup`**, masukkan PIN yang tampil di OLED sebagai password-nya.
 3. Browser biasanya otomatis membuka halaman setup sendiri (seperti WiFi kafe/hotel). Kalau tidak, buka `http://192.168.4.1` manual.
-4. Pilih nama WiFi rumah Anda dari daftar (device otomatis scan), isi passwordnya, klik **Sambungkan**.
+4. Pilih nama WiFi rumah Anda dari daftar (device sudah scan duluan sebelum halaman ini kebuka), isi passwordnya, klik **Sambungkan**.
 5. Kalau berhasil, device restart otomatis dan langsung tersambung ke WiFi itu setiap kali nyala berikutnya — tidak perlu setup ulang.
 6. Kalau gagal (password salah/sinyal lemah), halaman tetap terbuka untuk dicoba lagi.
 
 WiFi yang tersimpan lewat cara ini disimpan di memori device (NVS), **lebih diutamakan** daripada `WIFI_SSID`/`WIFI_PASSWORD` di `config.local.h` — jadi aman walau firmware nanti di-update ulang tanpa WiFi dikompilasi ke dalamnya.
 
-**Mau ganti WiFi nanti** (pindah rumah, ganti router)? Tekan dan **tahan tombol BOOT** di board ESP32 selama ±2 detik saat/sesaat setelah dinyalakan — device akan masuk mode setup lagi tanpa menghapus data lain (batas daya, dll). Factory reset (`/factoryReset` di dashboard lokal atau lewat MQTT) juga ikut menghapus WiFi tersimpan sebagai bagian dari reset total.
+**Mau ganti WiFi nanti** (pindah rumah, ganti router)? Tekan dan **tahan tombol BOOT** di board ESP32 selama ±2 detik — bisa kapan saja, tidak harus pas baru dinyalakan, device yang sedang berjalan normal pun langsung masuk mode setup begitu ditahan 2 detik. Data lain (batas daya, dll) tidak ikut terhapus. Factory reset (`/factoryReset` di dashboard lokal atau lewat MQTT) juga ikut menghapus WiFi tersimpan sebagai bagian dari reset total.
 
 ## Update firmware OTA
 
