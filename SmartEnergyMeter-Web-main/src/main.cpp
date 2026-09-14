@@ -35,11 +35,11 @@ constexpr unsigned long PROVISION_HOLD_MS = 2000;
 
 // True only if the button was already held at boot AND stayed held for the
 // full PROVISION_HOLD_MS — a quick accidental bump during power-on isn't
-// enough to drop a working WiFi setup back into the setup portal.
+// enough to drop a working WiFi setup back into the setup portal. Only used
+// once, in setup() — safe to busy-wait with delay() there since nothing
+// else has started yet.
 bool provisionButtonHeld()
 {
-    pinMode(PROVISION_BUTTON_PIN, INPUT_PULLUP);
-
     if (digitalRead(PROVISION_BUTTON_PIN) != LOW)
     {
         return false;
@@ -53,6 +53,37 @@ bool provisionButtonHeld()
             return true;
         }
         delay(20);
+    }
+
+    return false;
+}
+
+// Same 2-second hold rule as provisionButtonHeld(), but polled once per
+// loop() iteration instead of busy-waiting — so holding the button while
+// the device is already up and running (not just at power-on) still works,
+// without blocking PZEM reads/MQTT/the dashboard while the button is down.
+bool provisionButtonHeldInLoop()
+{
+    static unsigned long pressStart = 0;
+    static bool triggered = false;
+
+    if (digitalRead(PROVISION_BUTTON_PIN) != LOW)
+    {
+        pressStart = 0;
+        triggered = false;
+        return false;
+    }
+
+    if (pressStart == 0)
+    {
+        pressStart = millis();
+        return false;
+    }
+
+    if (!triggered && millis() - pressStart >= PROVISION_HOLD_MS)
+    {
+        triggered = true;
+        return true;
     }
 
     return false;
@@ -114,6 +145,8 @@ void setup()
 
     oledBegin();
 
+    pinMode(PROVISION_BUTTON_PIN, INPUT_PULLUP);
+
     // Checked before anything else touches WiFi: either the button is being
     // held right now (user wants to reconfigure), or nothing usable is
     // configured at all (brand new device, nothing in NVS, nothing compiled
@@ -138,6 +171,16 @@ void setup()
 
 void loop()
 {
+    // Holding BOOT for 2s works during normal operation too, not just at
+    // power-on — wifiProvisionBegin() blocks here exactly like it does from
+    // setup(), and restarts the device itself once the user finishes (or
+    // never returns if they never do, which is fine — nothing else needs to
+    // run while the device is waiting to be reconfigured).
+    if (provisionButtonHeldInLoop())
+    {
+        wifiProvisionBegin();
+    }
+
     // Membaca PZEM setiap SENSOR_INTERVAL
     if (millis() - sensorTimer >= SENSOR_INTERVAL)
     {
