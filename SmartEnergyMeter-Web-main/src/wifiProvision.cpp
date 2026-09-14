@@ -9,6 +9,7 @@
 
 #include "oled.h"
 #include "storage.h"
+#include "webServer.h"
 
 namespace {
 constexpr byte DNS_PORT = 53;
@@ -184,6 +185,14 @@ void wifiProvisionBegin()
     Serial.println("===== MODE SETUP WIFI =====");
     Serial.printf("Sambungkan HP/laptop ke WiFi \"%s\", PIN: %s\n", AP_SSID, apPassword);
     oledShowProvisioning(apPassword);
+
+    // Only relevant when the button was held during normal operation (not
+    // at first boot) — the dashboard's own AsyncWebServer is already bound
+    // to port 80 at that point and would otherwise silently win every
+    // request over the portal server below, since both are bound to all
+    // interfaces and nothing distinguishes "arrived via the AP" from
+    // "arrived via the home network" at the TCP level.
+    webServerEnd();
 
     // AP_STA (not just AP): the device stays reachable over its own setup
     // network for repeated attempts while /connect tries the chosen network

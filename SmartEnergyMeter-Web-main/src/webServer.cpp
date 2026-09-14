@@ -310,6 +310,11 @@ void webServerBegin()
     Serial.println("HTTP server started");
 }
 
+void webServerEnd()
+{
+    server.end();
+}
+
 void webServerLoop()
 {
     webSocket.cleanupClients();
