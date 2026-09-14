@@ -47,8 +47,8 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 
 Device tidak perlu tahu WiFi rumah Anda sebelum di-flash. Kalau belum ada WiFi yang tersimpan (device baru, atau `WIFI_SSID` dikosongkan di `config.local.h`), begitu dinyalakan device otomatis membuka mode setup:
 
-1. OLED menampilkan "Setup WiFi — Sambung ke WiFi: SmartMeter-Setup".
-2. Dari HP/laptop, sambungkan ke WiFi bernama **`SmartMeter-Setup`** (terbuka, tanpa password).
+1. OLED menampilkan nama WiFi setup (`SmartMeter-Setup`) dan **PIN 8 digit acak** — PIN ini dibuat baru setiap kali masuk mode setup dan cuma tampil di layar device, jadi cuma orang yang benar-benar berdiri di depan alatnya yang bisa lihat dan menyambung.
+2. Dari HP/laptop, sambungkan ke WiFi bernama **`SmartMeter-Setup`**, masukkan PIN yang tampil di OLED sebagai password-nya.
 3. Browser biasanya otomatis membuka halaman setup sendiri (seperti WiFi kafe/hotel). Kalau tidak, buka `http://192.168.4.1` manual.
 4. Pilih nama WiFi rumah Anda dari daftar (device otomatis scan), isi passwordnya, klik **Sambungkan**.
 5. Kalau berhasil, device restart otomatis dan langsung tersambung ke WiFi itu setiap kali nyala berikutnya — tidak perlu setup ulang.

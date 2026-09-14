@@ -5,6 +5,7 @@
 #include <DNSServer.h>
 #include <ESPAsyncWebServer.h>
 #include <ArduinoJson.h>
+#include <esp_system.h>
 
 #include "oled.h"
 #include "storage.h"
@@ -17,10 +18,20 @@ constexpr uint16_t PORTAL_PORT = 80;
 // stays open for another try.
 constexpr unsigned long CONNECT_TIMEOUT_MS = 15000;
 
-// Open on purpose — this network only exists for the short time it takes to
-// pick a WiFi from a list, and requiring its own password would just be
-// another thing to hand off with the device.
 const char *AP_SSID = "SmartMeter-Setup";
+
+// Random each time setup mode is entered, shown only on the device's own
+// OLED — so joining this network requires standing in front of the physical
+// device, rather than just being somewhere within WiFi range of it.
+char apPassword[9];
+
+void generateApPassword()
+{
+    // esp_random() is the hardware RNG, not seeded from anything predictable
+    // like millis() — unlike a fixed/compiled password, this can't leak by
+    // reading the firmware or the public source.
+    snprintf(apPassword, sizeof(apPassword), "%08u", (unsigned int)(esp_random() % 100000000UL));
+}
 
 DNSServer dnsServer;
 AsyncWebServer portalServer(PORTAL_PORT);
@@ -168,15 +179,17 @@ void handleCaptivePortal(AsyncWebServerRequest *request)
 
 void wifiProvisionBegin()
 {
+    generateApPassword();
+
     Serial.println("===== MODE SETUP WIFI =====");
-    Serial.printf("Sambungkan HP/laptop ke WiFi \"%s\", lalu buka browser.\n", AP_SSID);
-    oledShowProvisioning();
+    Serial.printf("Sambungkan HP/laptop ke WiFi \"%s\", PIN: %s\n", AP_SSID, apPassword);
+    oledShowProvisioning(apPassword);
 
     // AP_STA (not just AP): the device stays reachable over its own setup
     // network for repeated attempts while /connect tries the chosen network
     // as a station in the background.
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID);
+    WiFi.softAP(AP_SSID, apPassword);
 
     dnsServer.start(DNS_PORT, "*", WiFi.softAPIP());
 

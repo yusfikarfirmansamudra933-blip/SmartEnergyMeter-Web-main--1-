@@ -285,22 +285,22 @@ display.display();
 
 }
 
-void oledShowProvisioning()
+void oledShowProvisioning(const char *apPassword)
 {
 
 display.clearDisplay();
 
 display.setTextSize(1);
 
-drawHeader("Setup WiFi");
+drawHeader("SmartMeter-Setup");
 
 display.setCursor(0,12);
 
-display.print("Sambung ke WiFi:");
+display.print("Sambung WiFi diatas");
 
 display.setCursor(0,23);
 
-display.print("SmartMeter-Setup");
+display.printf("PIN: %s", apPassword);
 
 display.display();
 
