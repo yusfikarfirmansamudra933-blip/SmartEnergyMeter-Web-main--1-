@@ -207,6 +207,7 @@ void mqttPublish()
     doc["trip"] = overload;
 
     // Suhu & kelembapan (DHT22)
+    doc["chipTemperature"] = chipTemperature;
     doc["temperature"] = temperature;
     doc["humidity"] = humidity;
     doc["dht"] = dhtOnline;

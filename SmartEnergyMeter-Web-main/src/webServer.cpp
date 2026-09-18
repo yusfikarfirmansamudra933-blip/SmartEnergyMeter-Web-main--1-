@@ -35,6 +35,7 @@ String createStatusJson()
     document["limit"] = powerLimit;
     document["wifi"] = wifiConnected();
     document["sensor"] = sensorOnline;
+    document["chipTemperature"] = chipTemperature;
     document["temperature"] = temperature;
     document["humidity"] = humidity;
     document["dht"] = dhtOnline;

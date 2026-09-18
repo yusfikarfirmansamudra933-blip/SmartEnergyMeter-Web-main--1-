@@ -21,6 +21,10 @@ extern bool sensorOnline;
 
 extern float temperature;
 extern float humidity;
+
+// Die temperature of the ESP32 itself (temperatureRead()), separate from the
+// DHT22's `temperature` above, which measures the air around the device.
+extern float chipTemperature;
 extern bool dhtOnline;
 
 extern uint32_t pzemReadCount;
