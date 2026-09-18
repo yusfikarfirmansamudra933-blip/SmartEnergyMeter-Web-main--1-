@@ -17,7 +17,6 @@ bool sensorOnline = false;
 
 float temperature = 0;
 float humidity = 0;
-float chipTemperature = 0;
 bool dhtOnline = false;
 
 uint32_t pzemReadCount = 0;

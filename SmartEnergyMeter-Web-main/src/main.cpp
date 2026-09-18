@@ -207,10 +207,6 @@ void loop()
     {
         dhtTimer = millis();
         readDHTSensor();
-
-        // Internal sensor, no wiring — shares this slower timer since it
-        // changes just as slowly and doesn't need PZEM-rate polling.
-        chipTemperature = temperatureRead();
     }
 
     mqttPublish();

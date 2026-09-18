@@ -18,7 +18,7 @@ const CIRC_SMALL = 2 * Math.PI * 40;
 const maxPoints = 40;
 
 const $ = id => document.getElementById(id);
-const meter = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, pf: 0, va: 0, var: 0, limit: 0, wifi: false, sensor: false, trip: false, temperature: 0, humidity: 0, dht: false, chipTemperature: null };
+const meter = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, pf: 0, va: 0, var: 0, limit: 0, wifi: false, sensor: false, trip: false, temperature: 0, humidity: 0, dht: false };
 const powerValues = [], voltageValues = [], currentValues = [];
 const chartState = { metric: "power" };
 let client;
@@ -51,9 +51,9 @@ function setBadge(id, text, state, baseClass) {
 // walau perangkat sudah mati — kosongkan tampilan saat status bukan "online"
 // supaya tidak terlihat seolah masih data langsung.
 function clearMetricsDisplay() {
-  ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var", "metric-temp", "metric-hum", "metric-chip"].forEach((id) => setText(id, "-"));
-  ["watt-percent-label", "metric-limit", "metric-remaining", "watt-percent-small", "pf-label", "chip-label"].forEach((id) => setText(id, "-"));
-  ["gauge-watt", "gauge-kwh", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-temp", "gauge-hum", "gauge-chip"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
+  ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var", "metric-temp", "metric-hum"].forEach((id) => setText(id, "-"));
+  ["watt-percent-label", "metric-limit", "metric-remaining", "watt-percent-small", "pf-label"].forEach((id) => setText(id, "-"));
+  ["gauge-watt", "gauge-kwh", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-temp", "gauge-hum"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
   setBadge("loadStatusBadge", "Offline", "bad", "px-2 py-0.5 rounded-full font-label-telemetry text-label-telemetry uppercase tracking-wider");
   setBadge("sensorStatusBadge", "Tidak diketahui", "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
   setText("fps", "Perangkat offline");
@@ -132,15 +132,6 @@ function updateDashboard() {
 
   setText("metric-hum", meter.dht ? format(meter.humidity, 0) : "-");
   setGauge("gauge-hum", CIRC_SMALL, meter.dht ? clampPercent(number(meter.humidity)) : 0);
-
-  // Absent on firmware older than the chip-temperature update, so "-"
-  // instead of a misleading 0.0.
-  const chip = meter.chipTemperature;
-  const hasChip = chip !== null && chip !== undefined && Number.isFinite(Number(chip));
-  setText("metric-chip", hasChip ? format(chip, 1) : "-");
-  setGauge("gauge-chip", CIRC_SMALL, hasChip ? rangePercent(chip, 30, 90) : 0);
-  setText("chip-label", !hasChip ? "-" : chip >= 85 ? "Terlalu panas" : chip >= 70 ? "Hangat" : "Normal");
-
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
 }
 

@@ -1,6 +1,6 @@
 # Smart Energy Meter
 
-Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suhu luar & kelembapan lewat DHT22, dan suhu chip ESP32 dari sensor internalnya), dengan dashboard lokal, dashboard cloud, dan bot Telegram — semuanya terhubung lewat broker MQTT.
+Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suhu luar & kelembapan lewat DHT22), dengan dashboard lokal, dashboard cloud, dan bot Telegram — semuanya terhubung lewat broker MQTT.
 
 ## Arsitektur
 
@@ -97,7 +97,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 | Topic | Arah | Isi |
 |---|---|---|
-| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, temperature = suhu luar DHT22, humidity, chipTemperature = suhu chip ESP32, dll), **retained** |
+| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, temperature = suhu luar DHT22, humidity, dll), **retained** |
 | `smartmeter/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
 | `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
 | `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
@@ -127,7 +127,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 **Menu tombol:** kirim `/start`, `/help`, atau `/menu` — bot membalas dengan tombol yang bisa langsung ditekan (Daya, Energi, Tegangan, Arus, Suhu, Power Factor, Status Lengkap, Batas Daya, Riwayat, Pengingat), jadi tidak perlu hafal nama command. Setiap kali tombol ditekan, menu ikut terkirim lagi bersama jawabannya supaya bisa lanjut menekan tombol berikutnya. Command ketik tetap jalan seperti biasa.
 
-`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/chip` `/limit` `/status` — cek data (`/suhu` menampilkan suhu luar & kelembapan dari DHT22 sekaligus suhu chip ESP32; `/chip` khusus suhu chip). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
+`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/limit` `/status` — cek data (`/suhu` menampilkan suhu luar & kelembapan dari DHT22). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
 
 ## Catatan keamanan
 

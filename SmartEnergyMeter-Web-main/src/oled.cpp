@@ -173,18 +173,21 @@ display.print(WiFi.localIP());
 void page5()
 {
 
-drawHeader("Suhu");
+drawHeader("Suhu Luar");
 
 display.setCursor(0,12);
 
 if(dhtOnline)
-display.printf("Luar:%.1fC %.0f%%",temperature,humidity);
+display.printf("Temp: %.1fC",temperature);
 else
-display.print("Luar: N/A");
+display.print("Temp: N/A");
 
 display.setCursor(0,23);
 
-display.printf("Chip:%.1fC",chipTemperature);
+if(dhtOnline)
+display.printf("Hum : %.1f%%",humidity);
+else
+display.print("Hum : N/A");
 
 }
 

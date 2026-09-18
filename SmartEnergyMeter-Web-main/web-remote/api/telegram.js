@@ -130,12 +130,6 @@ function formatRupiah(value) {
 function nowWIB() { return new Date(Date.now() + 7 * 60 * 60 * 1000); }
 function dayKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`; }
 
-// chipTemperature is absent on firmware older than the chip-temperature
-// update, so callers skip the line rather than printing a misleading 0.
-function hasChipTemp(data) {
-  return data.chipTemperature !== undefined && data.chipTemperature !== null && Number.isFinite(Number(data.chipTemperature));
-}
-
 function statusText(data) {
   return [
     "📊 Status Smart Energy Meter",
@@ -148,7 +142,6 @@ function statusText(data) {
     `Batas daya: ${num(data.limit, 0)} W`,
     data.dht ? `Suhu luar: ${num(data.temperature, 1)} °C` : null,
     data.dht ? `Kelembapan: ${num(data.humidity, 0)} %` : null,
-    hasChipTemp(data) ? `Suhu chip: ${num(data.chipTemperature, 1)} °C` : null,
     `Sensor PZEM: ${data.sensor ? "Online" : "Tidak terdeteksi"}`,
     `WiFi perangkat: ${data.wifi ? "Terhubung" : "Terputus"}`,
   ].filter(Boolean).join("\n");
@@ -169,12 +162,8 @@ const COMMANDS = {
   hz: (data) => `📶 Frekuensi: ${num(data.frequency, 1)} Hz`,
   pf: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
   powerfactor: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
-  suhu: (data) => [
-    data.dht ? `🌡️ Suhu luar: ${num(data.temperature, 1)} °C | Kelembapan: ${num(data.humidity, 0)} %` : "🌡️ Sensor DHT22 (suhu luar) belum terpasang/terbaca.",
-    hasChipTemp(data) ? `🔧 Suhu chip ESP32: ${num(data.chipTemperature, 1)} °C` : null,
-  ].filter(Boolean).join("\n"),
+  suhu: (data) => (data.dht ? `🌡️ Suhu luar: ${num(data.temperature, 1)} °C | Kelembapan: ${num(data.humidity, 0)} %` : "🌡️ Sensor DHT22 (suhu luar) belum terpasang/terbaca."),
   temp: (data) => COMMANDS.suhu(data),
-  chip: (data) => (hasChipTemp(data) ? `🔧 Suhu chip ESP32: ${num(data.chipTemperature, 1)} °C` : "🔧 Data suhu chip belum tersedia (firmware perangkat belum diperbarui)."),
   status: statusText,
   limit: (data) => `🎚️ Batas daya saat ini: ${num(data.limit, 0)} Watt`,
 };
@@ -201,8 +190,7 @@ const HELP_TEXT = [
   "/ampere - arus (Ampere)",
   "/frekuensi - frekuensi (Hz)",
   "/pf - power factor",
-  "/suhu - suhu luar (DHT22), kelembapan & suhu chip ESP32",
-  "/chip - suhu chip ESP32 saja",
+  "/suhu - suhu luar & kelembapan (DHT22)",
   "/limit - lihat batas daya saat ini",
   "/setlimit <angka> - ubah batas daya, contoh: /setlimit 500",
   "/status - semua data sekaligus",
@@ -308,7 +296,6 @@ function formatReply(text, data) {
   if (/ampere|\barus\b/.test(t)) return COMMANDS.arus(data);
   if (/frekuensi|\bhz\b/.test(t)) return COMMANDS.frekuensi(data);
   if (/power ?factor|\bpf\b|faktor daya/.test(t)) return COMMANDS.pf(data);
-  if (/\bchip\b|prosesor|\bcpu\b/.test(t)) return COMMANDS.chip(data);
   if (/suhu|temperatur|kelembapan|humid/.test(t)) return COMMANDS.suhu(data);
   if (/batas|limit/.test(t)) return COMMANDS.limit(data);
   if (/status|semua|kondisi|\bcek\b/.test(t)) return COMMANDS.status(data);
