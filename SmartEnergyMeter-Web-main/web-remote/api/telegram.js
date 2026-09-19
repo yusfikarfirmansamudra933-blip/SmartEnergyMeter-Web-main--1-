@@ -150,7 +150,7 @@ function statusText(data) {
     `Frekuensi: ${num(data.frequency, 1)} Hz`,
     `Power factor: ${num(data.pf, 2)}`,
     `Batas daya: ${num(data.limit, 0)} W`,
-    hasChipTemp(data) ? `Suhu ESP32: ${num(data.chipTemperature, 1)} °C (${chipTempState(Number(data.chipTemperature))})` : null,
+    hasChipTemp(data) ? `Suhu Hardware: ${num(data.chipTemperature, 1)} °C (${chipTempState(Number(data.chipTemperature))})` : null,
     `Sensor PZEM: ${data.sensor ? "Online" : "Tidak terdeteksi"}`,
     `WiFi perangkat: ${data.wifi ? "Terhubung" : "Terputus"}`,
   ].filter(Boolean).join("\n");
@@ -172,8 +172,8 @@ const COMMANDS = {
   pf: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
   powerfactor: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
   suhu: (data) => (hasChipTemp(data)
-    ? `🌡️ Suhu ESP32: ${num(data.chipTemperature, 1)} °C (${chipTempState(Number(data.chipTemperature))})`
-    : "🌡️ Suhu ESP32 belum tersedia (perangkat belum mengirim pembacaan yang valid)."),
+    ? `🌡️ Suhu Hardware: ${num(data.chipTemperature, 1)} °C (${chipTempState(Number(data.chipTemperature))})`
+    : "🌡️ Suhu Hardware belum tersedia (perangkat belum mengirim pembacaan yang valid)."),
   temp: (data) => COMMANDS.suhu(data),
   chip: (data) => COMMANDS.suhu(data),
   status: statusText,
@@ -202,7 +202,7 @@ const HELP_TEXT = [
   "/ampere - arus (Ampere)",
   "/frekuensi - frekuensi (Hz)",
   "/pf - power factor",
-  "/suhu - suhu chip ESP32",
+  "/suhu - suhu hardware",
   "/limit - lihat batas daya saat ini",
   "/setlimit <angka> - ubah batas daya, contoh: /setlimit 500",
   "/status - semua data sekaligus",
