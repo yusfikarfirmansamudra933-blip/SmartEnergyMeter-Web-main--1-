@@ -19,9 +19,11 @@ extern bool overload;
 
 extern bool sensorOnline;
 
-extern float temperature;
-extern float humidity;
-extern bool dhtOnline;
+// ESP32's own die temperature. chipTempValid is false when the internal
+// sensor isn't producing real readings (see chipTemp.cpp), in which case
+// chipTemperature must not be shown or published.
+extern float chipTemperature;
+extern bool chipTempValid;
 
 extern uint32_t pzemReadCount;
 
@@ -31,7 +33,7 @@ extern uint8_t signalQuality;
 
 extern unsigned long sensorTimer;
 
-extern unsigned long dhtTimer;
+extern unsigned long chipTempTimer;
 
 extern unsigned long oledTimer;
 

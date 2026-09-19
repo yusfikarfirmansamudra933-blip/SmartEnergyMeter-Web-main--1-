@@ -206,10 +206,13 @@ void mqttPublish()
     doc["sensor"] = sensorOnline;
     doc["trip"] = overload;
 
-    // Suhu & kelembapan (DHT22)
-    doc["temperature"] = temperature;
-    doc["humidity"] = humidity;
-    doc["dht"] = dhtOnline;
+    // Suhu chip ESP32 — sengaja dihilangkan (bukan dikirim sebagai 0) kalau
+    // sensor internalnya tidak memberi pembacaan valid, supaya penerima tidak
+    // menampilkan angka palsu.
+    if (chipTempValid)
+    {
+        doc["chipTemperature"] = chipTemperature;
+    }
 
     String json;
 

@@ -173,21 +173,25 @@ display.print(WiFi.localIP());
 void page5()
 {
 
-drawHeader("Suhu Luar");
+drawHeader("Suhu ESP32");
 
 display.setCursor(0,12);
 
-if(dhtOnline)
-display.printf("Temp: %.1fC",temperature);
+if(chipTempValid)
+display.printf("Chip: %.1fC",chipTemperature);
 else
-display.print("Temp: N/A");
+display.print("Chip: N/A");
 
 display.setCursor(0,23);
 
-if(dhtOnline)
-display.printf("Hum : %.1f%%",humidity);
+if(!chipTempValid)
+display.print("Sensor tdk valid");
+else if(chipTemperature>=85)
+display.print("Terlalu panas");
+else if(chipTemperature>=70)
+display.print("Hangat");
 else
-display.print("Hum : N/A");
+display.print("Normal");
 
 }
 

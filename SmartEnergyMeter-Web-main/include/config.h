@@ -12,7 +12,7 @@
 
 // Bumped manually on each release so /api/status and the OTA panel can show
 // which build is currently running (useful to confirm an update took effect).
-#define FIRMWARE_VERSION "1.10.1"
+#define FIRMWARE_VERSION "1.11.0"
 
 /*==============================
         OLED
@@ -32,12 +32,6 @@
 
 #define PZEM_RX 16
 #define PZEM_TX 17
-
-/*==============================
-        DHT22
-==============================*/
-
-#define DHT_PIN 4
 
 /*==============================
         UPDATE

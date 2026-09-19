@@ -8,7 +8,7 @@
 #include "storage.h"
 #include "oled.h"
 #include "pzem.h"
-#include "dhtSensor.h"
+#include "chipTemp.h"
 #include "wifiManager.h"
 #include "wifiProvision.h"
 #include "webServer.h"
@@ -21,10 +21,9 @@ namespace {
 // about to roll back anyway there's no point spinning those up first.
 constexpr unsigned long OTA_VERIFY_TIMEOUT_MS = 20000;
 
-// DHT22 only refreshes internally every ~2s; polling faster just re-reads
-// the same stale value (or returns NaN), unlike the PZEM which is happy at
-// SENSOR_INTERVAL.
-constexpr unsigned long DHT_READ_INTERVAL_MS = 2500;
+// Chip temperature moves over seconds-to-minutes, so there's no reason to
+// poll it at the PZEM's SENSOR_INTERVAL.
+constexpr unsigned long CHIP_TEMP_READ_INTERVAL_MS = 2500;
 
 // GPIO0 is the "BOOT" button already on every ESP32 dev board — no extra
 // wiring needed. The bootloader only cares about its state for a moment at
@@ -158,7 +157,6 @@ void setup()
     }
 
     pzemBegin();
-    dhtSensorBegin();
     wifiBegin();
 
     verifyOtaOrRollBack();
@@ -203,10 +201,10 @@ void loop()
         );
     }
 
-    if (millis() - dhtTimer >= DHT_READ_INTERVAL_MS)
+    if (millis() - chipTempTimer >= CHIP_TEMP_READ_INTERVAL_MS)
     {
-        dhtTimer = millis();
-        readDHTSensor();
+        chipTempTimer = millis();
+        readChipTemperature();
     }
 
     mqttPublish();
