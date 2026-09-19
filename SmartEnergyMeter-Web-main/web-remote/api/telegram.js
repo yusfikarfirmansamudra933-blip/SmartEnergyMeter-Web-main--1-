@@ -173,7 +173,7 @@ const COMMANDS = {
   powerfactor: (data) => `📐 Power factor: ${num(data.pf, 2)}`,
   suhu: (data) => (hasChipTemp(data)
     ? `🌡️ Suhu ESP32: ${num(data.chipTemperature, 1)} °C (${chipTempState(Number(data.chipTemperature))})`
-    : "🌡️ Suhu ESP32 tidak tersedia — sensor internal chip ini tidak memberi pembacaan yang valid."),
+    : "🌡️ Suhu ESP32 belum tersedia (perangkat belum mengirim pembacaan yang valid)."),
   temp: (data) => COMMANDS.suhu(data),
   chip: (data) => COMMANDS.suhu(data),
   status: statusText,

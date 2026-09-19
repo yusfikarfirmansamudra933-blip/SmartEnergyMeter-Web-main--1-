@@ -19,8 +19,8 @@ extern bool overload;
 
 extern bool sensorOnline;
 
-// ESP32's own die temperature. chipTempValid is false when the internal
-// sensor isn't producing real readings (see chipTemp.cpp), in which case
+// ESP32's own die temperature. chipTempValid is false until the first good
+// reading (or if the sensor reads out of range), in which case
 // chipTemperature must not be shown or published.
 extern float chipTemperature;
 extern bool chipTempValid;

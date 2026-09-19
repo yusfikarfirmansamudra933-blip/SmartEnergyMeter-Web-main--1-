@@ -29,7 +29,7 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 1. Salin `include/config.example.h` menjadi `include/config.local.h`.
 2. Isi kredensial MQTT milik Anda sendiri. File lokal ini diabaikan Git. **`WIFI_SSID`/`WIFI_PASSWORD` boleh dikosongkan** — device baru akan otomatis masuk mode setup WiFi lewat browser saat pertama nyala, lihat bagian "Setup WiFi pertama kali" di bawah. Isi keduanya hanya kalau Anda ingin WiFi sudah langsung tersambung tanpa perlu setup manual (misal untuk testing cepat di meja).
 3. Isi sertifikat CA broker pada `MQTT_CA_CERT` (lihat catatan format di bawah). Jangan gunakan `MQTT_TLS_INSECURE` di perangkat produksi.
-4. Suhu chip ESP32 dibaca dari sensor internal, tidak butuh kabel atau komponen tambahan. **Catatan:** pada sebagian board ESP32 klasik, sensor internal ini menghasilkan angka mentah yang macet (selalu 53,33°C). Firmware mendeteksinya dan tidak mengirim angka itu — OLED menampilkan "N/A", dashboard menampilkan "-", dan bot menyatakan datanya tidak tersedia.
+4. Suhu chip ESP32 dibaca dari sensor internal, tidak butuh kabel atau komponen tambahan. **Catatan akurasi:** sensor ini tidak dikalibrasi pabrik, jadi angka absolutnya bisa meleset beberapa derajat — andalkan tren naik/turunnya, bukan angka persisnya. Fungsi bawaan Arduino (`temperatureRead()`) sengaja tidak dipakai: ia menunggu terlalu singkat setelah sensor dinyalakan sehingga hampir selalu mengembalikan angka macet 53,33°C. `src/chipTemp.cpp` membaca register sensor sendiri dengan waktu tunggu yang cukup (diukur di board ESP32-D0WD-V3: stabil mulai ±1 ms).
 5. Build dan unggah firmware serta filesystem dengan PlatformIO:
 
    ```sh
@@ -95,7 +95,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 | Topic | Arah | Isi |
 |---|---|---|
-| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32 — tidak dikirim kalau sensor internalnya tidak valid, dll), **retained** |
+| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32 — tidak dikirim kalau belum ada pembacaan valid, dll), **retained** |
 | `smartmeter/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
 | `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
 | `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |

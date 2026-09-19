@@ -125,14 +125,13 @@ function updateDashboard() {
   setText("metric-var", Math.round(number(meter.var)));
   setGauge("gauge-var", CIRC_SMALL, rangePercent(meter.var, 0, maxVar));
 
-  // Firmware sengaja tidak mengirim chipTemperature kalau sensor internal
-  // ESP32 tidak memberi pembacaan valid (angka macet) — tampilkan "-" alih-alih
-  // 0.0 atau angka palsu.
+  // Firmware sengaja tidak mengirim chipTemperature kalau belum ada pembacaan
+  // valid — tampilkan "-" alih-alih 0.0 atau angka palsu.
   const chip = meter.chipTemperature;
   const hasChip = chip !== null && chip !== undefined && Number.isFinite(Number(chip));
   setText("metric-chip", hasChip ? format(chip, 1) : "-");
   setGauge("gauge-chip", CIRC_SMALL, hasChip ? rangePercent(chip, 30, 90) : 0);
-  setText("chip-label", !hasChip ? "Sensor tidak valid" : chip >= 85 ? "Terlalu panas" : chip >= 70 ? "Hangat" : "Normal");
+  setText("chip-label", !hasChip ? "Belum tersedia" : chip >= 85 ? "Terlalu panas" : chip >= 70 ? "Hangat" : "Normal");
 
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
 }

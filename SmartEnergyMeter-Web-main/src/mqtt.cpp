@@ -207,8 +207,7 @@ void mqttPublish()
     doc["trip"] = overload;
 
     // Suhu chip ESP32 — sengaja dihilangkan (bukan dikirim sebagai 0) kalau
-    // sensor internalnya tidak memberi pembacaan valid, supaya penerima tidak
-    // menampilkan angka palsu.
+    // belum ada pembacaan valid, supaya penerima tidak menampilkan angka palsu.
     if (chipTempValid)
     {
         doc["chipTemperature"] = chipTemperature;

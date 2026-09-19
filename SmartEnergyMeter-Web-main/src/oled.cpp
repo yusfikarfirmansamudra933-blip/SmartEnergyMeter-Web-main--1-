@@ -185,7 +185,7 @@ display.print("Chip: N/A");
 display.setCursor(0,23);
 
 if(!chipTempValid)
-display.print("Sensor tdk valid");
+display.print("Belum ada data");
 else if(chipTemperature>=85)
 display.print("Terlalu panas");
 else if(chipTemperature>=70)
