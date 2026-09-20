@@ -9,6 +9,7 @@
 #include "oled.h"
 #include "pzem.h"
 #include "chipTemp.h"
+#include "billing.h"
 #include "wifiManager.h"
 #include "wifiProvision.h"
 #include "webServer.h"
@@ -163,6 +164,7 @@ void setup()
 
     mqttBegin();
     webServerBegin();
+    billingBegin();
 
     Serial.println("Initialization Complete");
 }
@@ -206,6 +208,8 @@ void loop()
         chipTempTimer = millis();
         readChipTemperature();
     }
+
+    billingLoop();
 
     mqttPublish();
 

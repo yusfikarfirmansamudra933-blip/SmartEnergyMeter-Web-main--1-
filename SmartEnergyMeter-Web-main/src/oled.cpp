@@ -4,6 +4,7 @@
 #include <Adafruit_SSD1306.h>
 #include <WiFi.h>
 
+#include "billing.h"
 #include "config.h"
 #include "globals.h"
 #include "wifiManager.h"
@@ -195,6 +196,54 @@ display.print("Normal");
 
 }
 
+// Rupiah with '.' thousands separators, e.g. 1234567 -> "1.234.567".
+static void formatRupiah(char *out, size_t size, float rp)
+{
+
+char digits[16];
+snprintf(digits,sizeof(digits),"%ld",lroundf(rp));
+
+size_t len=strlen(digits);
+size_t o=0;
+
+for(size_t i=0;i<len&&o+2<size;i++)
+{
+out[o++]=digits[i];
+size_t remaining=len-i-1;
+if(remaining>0&&remaining%3==0)
+out[o++]='.';
+}
+
+out[o]=0;
+
+}
+
+void page6()
+{
+
+drawHeader("Tagihan");
+
+if(!billingValid)
+{
+display.setCursor(0,12);
+display.print("Menunggu waktu...");
+display.setCursor(0,23);
+display.print("(butuh WiFi)");
+return;
+}
+
+char rp[16];
+
+display.setCursor(0,12);
+formatRupiah(rp,sizeof(rp),billingWeekRp);
+display.printf("Minggu: Rp%s",rp);
+
+display.setCursor(0,23);
+formatRupiah(rp,sizeof(rp),billingMonthRp);
+display.printf("Bulan : Rp%s",rp);
+
+}
+
 // Fast, non-blocking: only sets state. Safe to call from the OTA upload
 // handler's task. The actual I2C drawing happens in oledLoop() instead.
 void oledOtaProgress(uint8_t percent)
@@ -362,7 +411,7 @@ pageMillis=millis();
 
 page++;
 
-if(page>4)
+if(page>5)
 page=0;
 
 }
@@ -399,6 +448,12 @@ break;
 case 4:
 
 page5();
+
+break;
+
+case 5:
+
+page6();
 
 break;
 
