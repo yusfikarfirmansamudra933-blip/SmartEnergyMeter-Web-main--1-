@@ -27,7 +27,7 @@ function formatRupiah(value) {
 
 // Must match ELECTRICITY_RATE in api/monitor.js — there's no per-user rate
 // setting (no UI for it), this is just the single source of truth.
-function getElectricityRate() { return 1500; }
+function getElectricityRate() { return 1444.7; }
 
 function monthKey(year, monthIndex) { return `${year}-${String(monthIndex + 1).padStart(2, "0")}`; }
 function dayKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }

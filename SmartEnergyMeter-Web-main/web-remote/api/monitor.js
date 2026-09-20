@@ -29,7 +29,7 @@ const TOPIC_BILLING_WEEKLY_START = "smartmeter/billing/weekly_start";
 
 // No per-user rate setting exists (no UI for it) — this is the single
 // source of truth now, matching the old client-side default in bill.js.
-const ELECTRICITY_RATE = 1500;
+const ELECTRICITY_RATE = 1444.7;
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
 function connectBot() {
