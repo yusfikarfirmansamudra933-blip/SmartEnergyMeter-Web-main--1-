@@ -1,150 +1,136 @@
 <!doctype html>
-<html class="dark" lang="id">
+<html lang="id" data-theme="light">
 <head>
 <meta charset="utf-8"/>
-<meta content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" name="viewport"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
 <title>Tagihan Listrik</title>
-<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<!-- Pasang tema sebelum halaman digambar supaya tidak berkedip. Tanpa localStorage: tema terang. -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")==="dark"?"dark":"light"}catch(e){}</script>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
-<style>@layer base{html,body{width:100vw;margin:0;padding:0;background-color:#0b1326;}body{overscroll-behavior:none;}.pb-safe{padding-bottom:env(safe-area-inset-bottom,0px);}.pt-safe{padding-top:env(safe-area-inset-top,0px);}main>:first-child{margin-top:0!important;}main>:last-child{margin-bottom:0!important;}}::-webkit-scrollbar{display:none;}</style>
+<link href="theme.css" rel="stylesheet"/>
 <script src="https://cdn.tailwindcss.com"></script>
-<script id="tailwind-config">tailwind.config = { darkMode: "class", theme: { extend: { "colors": { "surface": "#0b1326", "on-surface-variant": "#bbcabf", "surface-slate": "#1E293B", "on-primary-fixed": "#002113", "on-secondary-fixed-variant": "#004e5c", "tertiary": "#ffb95f", "outline": "#86948a", "primary": "#4edea3", "surface-container-high": "#222a3d", "on-tertiary-fixed": "#2a1700", "on-error-container": "#ffdad6", "background": "#0b1326", "tertiary-container": "#e29100", "secondary-fixed-dim": "#4cd7f6", "text-dim": "#94A3B8", "inverse-surface": "#dae2fd", "on-tertiary-container": "#523200", "surface-charcoal": "#0B1120", "on-secondary-container": "#00424e", "tertiary-fixed-dim": "#ffb95f", "danger-rose": "#F43F5E", "inverse-primary": "#006c49", "on-primary-container": "#00422b", "surface-bright": "#31394d", "inverse-on-surface": "#283044", "secondary-fixed": "#acedff", "primary-fixed-dim": "#4edea3", "on-surface": "#dae2fd", "surface-container-lowest": "#060e20", "on-primary": "#003824", "surface-container": "#171f33", "secondary": "#4cd7f6", "surface-dim": "#0b1326", "surface-container-low": "#131b2e", "surface-variant": "#2d3449", "error": "#ffb4ab", "secondary-container": "#03b5d3", "outline-variant": "#3c4a42", "on-secondary-fixed": "#001f26", "primary-container": "#10b981", "error-container": "#93000a", "on-secondary": "#003640", "tertiary-fixed": "#ffddb8", "surface-container-highest": "#2d3449", "on-error": "#690005", "on-primary-fixed-variant": "#005236", "surface-tint": "#4edea3", "primary-fixed": "#6ffbbe", "on-background": "#dae2fd", "on-tertiary-fixed-variant": "#653e00", "on-tertiary": "#472a00" }, "borderRadius": { "DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px" }, "spacing": { "gutter-xs": "0.25rem", "gutter-sm": "0.5rem", "card-pad": "1.25rem", "gutter-lg": "1.5rem", "gutter-md": "1rem", "gutter-xl": "2rem", "panel-gap": "1rem" }, "fontFamily": { "headline-metric": ["Space Grotesk", "sans-serif"], "metric-unit": ["JetBrains Mono", "monospace"], "label-telemetry": ["JetBrains Mono", "monospace"], "body-md": ["Space Grotesk", "sans-serif"], "title-md": ["Space Grotesk", "sans-serif"], "display-lg": ["Space Grotesk", "sans-serif"], "body-sm": ["Space Grotesk", "sans-serif"], "headline-metric-mobile": ["Space Grotesk", "sans-serif"], "display-lg-mobile": ["Space Grotesk", "sans-serif"] }, "fontSize": { "headline-metric": ["32px", { "lineHeight": "38px", "letterSpacing": "-0.02em", "fontWeight": "600" }], "metric-unit": ["12px", { "lineHeight": "16px", "letterSpacing": "0.04em", "fontWeight": "500" }], "label-telemetry": ["11px", { "lineHeight": "14px", "letterSpacing": "0.08em", "fontWeight": "600" }], "body-md": ["14px", { "lineHeight": "20px", "letterSpacing": "0.01em", "fontWeight": "400" }], "title-md": ["18px", { "lineHeight": "24px", "letterSpacing": "0em", "fontWeight": "600" }], "display-lg": ["48px", { "lineHeight": "56px", "letterSpacing": "-0.03em", "fontWeight": "700" }], "body-sm": ["12px", { "lineHeight": "16px", "letterSpacing": "0.01em", "fontWeight": "400" }], "headline-metric-mobile": ["26px", { "lineHeight": "32px", "letterSpacing": "-0.01em", "fontWeight": "600" }], "display-lg-mobile": ["32px", { "lineHeight": "40px", "letterSpacing": "-0.02em", "fontWeight": "700" }] } } } };</script>
+<script src="theme.js"></script>
 </head>
-<body class="bg-surface font-body-md text-body-md text-on-surface flex flex-col min-h-screen selection:bg-primary selection:text-on-primary">
-<main class="flex flex-col relative w-full pt-safe pb-24 bg-surface min-h-screen">
-<div class="flex flex-col w-full px-gutter-md space-y-panel-gap pt-gutter-md">
+<body class="bg-surface font-sans text-body text-ink flex flex-col min-h-screen selection:bg-accent selection:text-on-btn">
 
-<div class="flex flex-col space-y-gutter-xs">
-<div class="flex items-center justify-between">
-<a class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-surface-container hover:bg-surface-container-high transition-all text-secondary active:scale-95 group" href="index.html">
-<span class="material-symbols-outlined text-[18px] group-hover:-translate-x-0.5 transition-transform">arrow_back</span>
-<span class="font-label-telemetry text-label-telemetry uppercase tracking-wider text-secondary">Kembali ke Monitoring</span>
-</a>
-<div class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-surface-container-high">
-<span class="relative flex h-2 w-2"><span class="animate-ping absolute inline-flex h-full w-full rounded-full bg-primary opacity-75"></span><span class="relative inline-flex rounded-full h-2 w-2 bg-primary"></span></span>
-<span class="font-label-telemetry text-label-telemetry text-primary uppercase" id="brokerBadge">Menghubungkan</span>
-</div>
-</div>
-<div class="flex flex-col pt-1">
-<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-widest">TELEMETRI BIAYA</span>
-<h1 class="font-display-lg-mobile text-display-lg-mobile text-on-surface font-bold tracking-tight">Estimasi Tagihan</h1>
-<p class="font-body-sm text-body-sm text-on-surface-variant leading-relaxed">Dihitung dari akumulasi energi (kWh) yang dilaporkan perangkat lewat cloud.</p>
-</div>
-</div>
+<header class="fixed top-0 w-full z-50 pt-safe bg-card border-b border-line">
+  <div class="h-16 px-4 flex items-center justify-between gap-2">
+    <div class="flex flex-col gap-1 min-w-0 flex-1">
+      <span class="text-title text-ink tracking-tight truncate uppercase leading-none font-bold">Smart Energy Meter</span>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-flex h-2 w-2 rounded-full" id="brokerDot" style="background:var(--bad)"></span>
+          <span class="font-mono text-label" id="brokerBadge" style="color:var(--bad-ink)">Menghubungkan</span>
+        </span>
+      </div>
+    </div>
+    <button aria-label="Ganti ke tema gelap" aria-pressed="false" class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-ink-2 hover:text-ink hover:bg-inset transition-colors" id="btn-theme" type="button">
+      <span aria-hidden="true" class="material-symbols-outlined text-[22px]" id="btn-theme-icon">dark_mode</span>
+    </button>
+  </div>
+</header>
 
-<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-xl flex flex-col relative overflow-hidden">
-<div class="absolute -top-12 -right-12 w-44 h-44 rounded-full bg-primary/10 blur-3xl pointer-events-none"></div>
-<div class="flex items-center justify-between z-10">
-<div class="flex flex-col">
-<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">BULAN BERJALAN</span>
-<span class="font-title-md text-title-md text-on-surface font-semibold" id="heroMonthLabel">-</span>
-</div>
-<div class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-container/15 text-primary" id="heroBadge">
-<span class="material-symbols-outlined text-[16px]">eco</span>
-<span class="font-label-telemetry text-label-telemetry uppercase font-semibold" id="heroBadgeText">-</span>
-</div>
-</div>
-<div class="flex flex-col sm:flex-row items-center gap-gutter-md my-gutter-md z-10">
-<div class="relative flex items-center justify-center shrink-0 w-36 h-36">
-<svg class="w-36 h-36 transform -rotate-90" viewBox="0 0 120 120">
-<circle class="stroke-surface-container-highest" cx="60" cy="60" fill="none" r="50" stroke-width="10"></circle>
-<circle class="stroke-primary" cx="60" cy="60" fill="none" id="heroGauge" r="50" stroke-dasharray="314.16" stroke-dashoffset="314.16" stroke-linecap="round" stroke-width="10"></circle>
-</svg>
-<div class="absolute flex flex-col items-center justify-center text-center">
-<span class="font-display-lg-mobile text-display-lg-mobile text-primary font-bold leading-none" id="heroGaugeValue">0%</span>
-<span class="font-metric-unit text-metric-unit text-text-dim mt-0.5">PROGRES BULAN</span>
-</div>
-</div>
-<div class="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
-<span class="font-metric-unit text-metric-unit text-text-dim">TOTAL BIAYA TERCATAT</span>
-<div class="flex items-baseline gap-1 my-0.5"><span class="font-headline-metric-mobile text-headline-metric-mobile text-primary font-bold" id="heroTotal">Rp 0</span></div>
-<div class="flex items-center gap-1 text-on-surface-variant">
-<span class="material-symbols-outlined text-[15px] text-secondary">bolt</span>
-<span class="font-label-telemetry text-label-telemetry" id="heroKwhRate">0.000 kWh • Rp 0/kWh</span>
-</div>
-</div>
-</div>
-<div class="w-full rounded-lg bg-surface-charcoal p-gutter-sm flex items-center justify-between z-10">
-<div class="flex items-center gap-2">
-<div class="w-8 h-8 rounded-md bg-surface-container flex items-center justify-center text-tertiary"><span class="material-symbols-outlined text-[18px]">query_stats</span></div>
-<div class="flex flex-col">
-<span class="font-label-telemetry text-label-telemetry text-text-dim uppercase">Proyeksi Akhir Bulan</span>
-<span class="font-body-md text-body-md text-tertiary font-semibold" id="projectionValue">-</span>
-</div>
-</div>
-<span class="font-metric-unit text-metric-unit text-on-surface-variant">Estimasi linear</span>
-</div>
-</div>
+<main class="flex flex-col w-full pt-16 pb-24 min-h-screen">
+  <div class="flex flex-col px-4 py-4 gap-4">
 
-<div class="w-full rounded-xl bg-surface-container-low p-card-pad shadow-lg flex flex-col space-y-gutter-sm">
-<div class="flex items-center justify-between">
-<div class="flex flex-col">
-<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">TREN PENGELUARAN</span>
-<span class="font-title-md text-title-md text-on-surface font-semibold">Tagihan per Bulan (Tahun Ini)</span>
-</div>
-<div class="w-8 h-8 rounded-lg bg-surface-container flex items-center justify-center text-on-surface-variant"><span class="material-symbols-outlined text-[18px]">bar_chart</span></div>
-</div>
-<div class="w-full bg-surface-charcoal rounded-lg p-card-pad flex flex-col space-y-gutter-sm">
-<div class="w-full flex gap-2">
-<div class="h-36 flex flex-col justify-between items-end shrink-0 pt-4 text-text-dim font-metric-unit text-metric-unit">
-<span id="trendAxisTop">-</span>
-<span id="trendAxisMid">-</span>
-<span>Rp 0</span>
-</div>
-<div class="h-36 flex-1 min-w-0 flex items-end gap-gutter-xs pt-4 overflow-x-auto" id="trendBars"></div>
-</div>
-<div class="flex items-center gap-2 p-2.5 rounded-lg bg-surface-container-high/60">
-<span class="material-symbols-outlined text-[18px] text-primary shrink-0" id="insightIcon">trending_down</span>
-<p class="font-body-sm text-body-sm text-on-surface" id="insightText">Belum cukup data untuk membandingkan dengan bulan lalu.</p>
-</div>
-</div>
-</div>
+    <div class="flex flex-col gap-1">
+      <h1 class="text-headline text-ink">Estimasi Tagihan</h1>
+      <p class="text-small text-ink-2">Dihitung dari akumulasi energi (kWh) yang dilaporkan perangkat lewat cloud.</p>
+    </div>
 
-<div class="w-full flex flex-col space-y-gutter-sm">
-<div class="flex flex-col">
-<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">RINCIAN MINGGUAN</span>
-<span class="font-title-md text-title-md text-on-surface font-semibold">Pilih Bulan &amp; Siklus Beban</span>
-</div>
-<div class="flex items-center gap-gutter-xs overflow-x-auto pb-1" id="month-tabs"></div>
-<div class="flex flex-col space-y-gutter-xs" id="weekCards"></div>
-</div>
+    <!-- Fokus utama halaman: total biaya bulan berjalan. -->
+    <section aria-labelledby="heroMonthLabel" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4">
+      <div class="flex items-start justify-between gap-2">
+        <div class="flex flex-col">
+          <span class="font-mono text-label uppercase text-ink-2">Bulan berjalan</span>
+          <h2 class="text-title text-ink" id="heroMonthLabel">-</h2>
+        </div>
+        <span class="px-2 py-0.5 rounded-md bg-inset text-ink-2 font-mono text-label text-right" id="heroBadge"><span id="heroBadgeText">-</span></span>
+      </div>
 
-<div class="w-full rounded-xl bg-surface-container-low p-card-pad flex flex-col space-y-gutter-sm">
-<div class="flex flex-col">
-<span class="font-label-telemetry text-label-telemetry text-secondary uppercase tracking-wider">EKSPOR DATA TELEMETRI</span>
-<span class="font-title-md text-title-md text-on-surface font-semibold">Unduh Dokumen Tagihan</span>
-<p class="font-body-sm text-body-sm text-on-surface-variant">Rincian harian &amp; mingguan untuk bulan yang sedang dipilih di atas.</p>
-</div>
-<div class="grid grid-cols-1 sm:grid-cols-2 gap-gutter-sm pt-1">
-<button class="w-full rounded-lg bg-surface-container hover:bg-surface-container-high active:scale-[0.98] p-3 flex items-center justify-between transition-all group" id="downloadExcelBtn">
-<div class="flex items-center gap-2.5">
-<div class="w-8 h-8 rounded bg-primary-container/20 text-primary flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">table_view</span></div>
-<div class="flex flex-col text-left"><span class="font-body-md text-body-md text-on-surface font-semibold group-hover:text-primary transition-colors">Unduh Excel (.xlsx)</span><span class="font-metric-unit text-metric-unit text-text-dim">Rincian harian &amp; mingguan</span></div>
-</div>
-<span class="material-symbols-outlined text-[20px] text-text-dim group-hover:text-primary transition-colors">download</span>
-</button>
-<button class="w-full rounded-lg bg-surface-container hover:bg-surface-container-high active:scale-[0.98] p-3 flex items-center justify-between transition-all group" id="downloadPdfBtn">
-<div class="flex items-center gap-2.5">
-<div class="w-8 h-8 rounded bg-secondary-container/20 text-secondary flex items-center justify-center"><span class="material-symbols-outlined text-[18px]">description</span></div>
-<div class="flex flex-col text-left"><span class="font-body-md text-body-md text-on-surface font-semibold group-hover:text-secondary transition-colors">Unduh PDF (.pdf)</span><span class="font-metric-unit text-metric-unit text-text-dim">Faktur &amp; lembar analisis</span></div>
-</div>
-<span class="material-symbols-outlined text-[20px] text-text-dim group-hover:text-secondary transition-colors">download</span>
-</button>
-</div>
-</div>
+      <div class="flex flex-col sm:flex-row items-center gap-4">
+        <div class="relative flex items-center justify-center shrink-0 w-36 h-36">
+          <svg aria-hidden="true" class="w-36 h-36 -rotate-90" viewBox="0 0 120 120">
+            <circle class="text-track fill-transparent" cx="60" cy="60" r="50" stroke="currentColor" stroke-width="10"></circle>
+            <circle class="gauge fill-transparent" cx="60" cy="60" id="heroGauge" r="50" stroke="currentColor" stroke-dasharray="314.16" stroke-dashoffset="314.16" stroke-linecap="round" stroke-width="10" style="color:var(--accent)"></circle>
+          </svg>
+          <div class="absolute flex flex-col items-center justify-center text-center">
+            <span class="text-display text-ink leading-none num" id="heroGaugeValue">0%</span>
+            <span class="font-mono text-small text-ink-2 mt-1">progres bulan</span>
+          </div>
+        </div>
+        <div class="flex flex-col items-center sm:items-start text-center sm:text-left min-w-0">
+          <span class="font-mono text-label uppercase text-ink-2">Total biaya tercatat</span>
+          <span class="text-headline text-ink my-0.5 num" id="heroTotal">Rp 0</span>
+          <span class="font-mono text-small text-ink-2 num" id="heroKwhRate">0.000 kWh &bull; Rp 0/kWh</span>
+        </div>
+      </div>
 
-</div>
+      <div class="w-full rounded-lg bg-inset px-3 py-2 flex items-center justify-between gap-2">
+        <div class="flex flex-col">
+          <span class="font-mono text-label uppercase text-ink-2">Proyeksi akhir bulan</span>
+          <span class="text-body text-ink font-bold num" id="projectionValue">-</span>
+        </div>
+        <span class="font-mono text-small text-ink-2 text-right">Estimasi linear</span>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-tren" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3">
+      <div class="flex flex-col">
+        <span class="font-mono text-label uppercase text-ink-2">Tren pengeluaran</span>
+        <h2 class="text-title text-ink" id="h-tren">Tagihan per bulan, dalam rupiah</h2>
+      </div>
+      <div class="w-full bg-inset rounded-lg p-3 flex flex-col gap-3">
+        <!-- Tanpa sumbu Y: tiap batang sudah berlabel nilainya (dalam rupiah), jadi sumbu hanya akan menambah angka yang tidak sejajar dengan batang. -->
+        <div class="w-full flex gap-2">
+          <div class="h-36 flex-1 min-w-0 relative">
+            <div class="h-full flex items-end gap-1 pt-4 pb-2 overflow-x-auto" id="trendBars"></div>
+            <p class="absolute inset-0 flex items-center justify-center text-small text-ink-2 pointer-events-none" id="trendEmpty">Menunggu data tagihan</p>
+          </div>
+        </div>
+        <p class="text-small text-ink-2 border-t border-line pt-3" id="insightText">Belum cukup data untuk membandingkan dengan bulan lalu.</p>
+      </div>
+    </section>
+
+    <section aria-labelledby="h-minggu" class="flex flex-col gap-3">
+      <div class="flex flex-col">
+        <span class="font-mono text-label uppercase text-ink-2">Rincian mingguan</span>
+        <h2 class="text-title text-ink" id="h-minggu">Pilih bulan</h2>
+      </div>
+      <div aria-label="Pilih bulan" class="flex items-center gap-1 overflow-x-auto pb-1" id="month-tabs" role="group"></div>
+      <div class="flex flex-col gap-1" id="weekCards"></div>
+    </section>
+
+    <section aria-labelledby="h-ekspor" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-title text-ink" id="h-ekspor">Unduh dokumen tagihan</h2>
+        <p class="text-small text-ink-2">Rincian harian dan mingguan untuk bulan yang sedang dipilih di atas.</p>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
+        <button class="w-full min-h-[44px] rounded-lg bg-inset hover:opacity-90 active:opacity-80 p-3 flex items-center gap-3 text-left transition-opacity" id="downloadExcelBtn" type="button">
+          <span aria-hidden="true" class="material-symbols-outlined text-[22px] text-ink-2">table_view</span>
+          <span class="flex flex-col"><span class="text-body text-ink font-semibold">Unduh Excel (.xlsx)</span><span class="font-mono text-small text-ink-2">Rincian harian dan mingguan</span></span>
+        </button>
+        <button class="w-full min-h-[44px] rounded-lg bg-inset hover:opacity-90 active:opacity-80 p-3 flex items-center gap-3 text-left transition-opacity" id="downloadPdfBtn" type="button">
+          <span aria-hidden="true" class="material-symbols-outlined text-[22px] text-ink-2">description</span>
+          <span class="flex flex-col"><span class="text-body text-ink font-semibold">Unduh PDF (.pdf)</span><span class="font-mono text-small text-ink-2">Tabel tagihan per minggu</span></span>
+        </button>
+      </div>
+    </section>
+
+  </div>
 </main>
-<nav class="fixed bottom-0 w-full z-50 pb-safe bg-surface-container-lowest/85 backdrop-blur-xl shadow-[0_-1px_12px_rgba(0,0,0,0.3)]">
-<div class="flex justify-around items-center h-16 px-gutter-sm">
-<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html"><span class="material-symbols-outlined text-[22px]">speed</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Monitor</span></a>
-<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html#riwayat-section"><span class="material-symbols-outlined text-[22px]">monitoring</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Riwayat</span></a>
-<a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 transition-colors text-primary border-t-2 border-primary" href="#"><span class="material-symbols-outlined text-[22px]">receipt_long</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Tagihan</span></a>
-<a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-on-surface-variant hover:text-on-surface transition-colors border-t-2 border-transparent" href="index.html#pengaturan-section"><span class="material-symbols-outlined text-[22px]">settings_ethernet</span><span class="font-label-telemetry text-label-telemetry uppercase tracking-wider mt-0.5">Pengaturan</span></a>
-</div>
+
+<nav aria-label="Navigasi utama" class="fixed bottom-0 w-full z-50 pb-safe bg-card border-t border-line">
+  <div class="flex justify-around items-center h-16 px-2">
+    <a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-ink-2 hover:text-ink border-t-2 border-transparent" href="index.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">speed</span><span class="font-mono text-label mt-0.5">Monitor</span></a>
+    <a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-accent-ink border-t-2 border-accent-ink" href="bill.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">receipt_long</span><span class="font-mono text-label mt-0.5">Tagihan</span></a>
+  </div>
 </nav>
+
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>

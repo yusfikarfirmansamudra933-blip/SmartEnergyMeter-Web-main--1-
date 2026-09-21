@@ -11,8 +11,9 @@ const TOPIC_DATA = "smartmeter/data";
 const TOPIC_STATUS = "smartmeter/status";
 const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
 
-const ONLINE_COLOR = "#4edea3";
-const OFFLINE_COLOR = "#ffb4ab";
+// Warna berasal dari variabel CSS di index.html, jadi ikut berganti dengan tema.
+const TONE_STROKE = { good: "var(--accent)", warn: "var(--warn)", bad: "var(--bad)" };
+const BADGE_BASE = "px-2 py-0.5 rounded-md font-mono text-label";
 const CIRC_LARGE = 2 * Math.PI * 68;
 const CIRC_SMALL = 2 * Math.PI * 40;
 const maxPoints = 40;
@@ -23,6 +24,7 @@ const powerValues = [], voltageValues = [], currentValues = [];
 const chartState = { metric: "power" };
 let client;
 let lastPacketAt = 0;
+let lastIntervalMs = 0;
 let deviceOnline = false;
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
@@ -43,8 +45,14 @@ function setBadge(id, text, state, baseClass) {
   const el = $(id);
   if (!el) return;
   el.textContent = text;
-  const colorClass = state === "good" ? "text-primary bg-primary/10" : state === "warn" ? "text-tertiary bg-tertiary/10" : "text-error bg-error/10";
+  const colorClass = state === "good" ? "text-accent-ink bg-accent-soft" : state === "warn" ? "text-warn-ink bg-warn-soft" : "text-bad-ink bg-bad-soft";
   el.className = `${baseClass} ${colorClass}`;
+}
+
+// Warna busur gauge membawa status (normal/hangat/bahaya), bukan hiasan.
+function setGaugeTone(id, tone) {
+  const el = $(id);
+  if (el) el.style.color = TONE_STROKE[tone] || TONE_STROKE.good;
 }
 
 // Broker meretensi pesan smartmeter/data terakhir, jadi angkanya tetap ada
@@ -52,10 +60,13 @@ function setBadge(id, text, state, baseClass) {
 // supaya tidak terlihat seolah masih data langsung.
 function clearMetricsDisplay() {
   ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var", "metric-chip"].forEach((id) => setText(id, "-"));
-  ["watt-percent-label", "metric-limit", "metric-remaining", "watt-percent-small", "pf-label", "chip-label"].forEach((id) => setText(id, "-"));
-  ["gauge-watt", "gauge-kwh", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-chip"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
-  setBadge("loadStatusBadge", "Offline", "bad", "px-2 py-0.5 rounded-full font-label-telemetry text-label-telemetry uppercase tracking-wider");
-  setBadge("sensorStatusBadge", "Tidak diketahui", "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
+  ["watt-percent-label", "metric-limit", "metric-remaining", "pf-label"].forEach((id) => setText(id, "-"));
+  setText("chip-label", "Belum tersedia");
+  ["gauge-watt", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-chip"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
+  setGaugeTone("gauge-watt", "good");
+  setGaugeTone("gauge-chip", "good");
+  setBadge("loadStatusBadge", "Offline", "bad", BADGE_BASE + " uppercase");
+  setBadge("sensorStatusBadge", "Tidak diketahui", "bad", BADGE_BASE);
   setText("fps", "Perangkat offline");
 }
 
@@ -63,15 +74,10 @@ function clearMetricsDisplay() {
 // Last Will (smartmeter/status) — bukan sekadar koneksi browser ke broker.
 function setDeviceStatus(online) {
   deviceOnline = online;
-  const color = online ? ONLINE_COLOR : OFFLINE_COLOR;
-  ["headerDot", "headerPulse", "subHeaderDot", "subHeaderPulse"].forEach((id) => {
-    const el = $(id);
-    if (el) el.style.background = color;
-  });
+  const dot = $("headerDot");
+  if (dot) dot.style.background = online ? "var(--accent)" : "var(--bad)";
   const headerText = $("headerStatusText");
-  if (headerText) { headerText.textContent = online ? "ONLINE" : "OFFLINE"; headerText.style.color = color; }
-  const subText = $("subHeaderStatusText");
-  if (subText) { subText.textContent = online ? "Aktif Terhubung" : "Terputus"; subText.style.color = color; }
+  if (headerText) { headerText.textContent = online ? "Online" : "Offline"; headerText.style.color = online ? "var(--accent-ink)" : "var(--bad-ink)"; }
   if (!online) clearMetricsDisplay();
 }
 
@@ -83,7 +89,8 @@ function setLoadBadge(percent, trip) {
   let state = "good", text = "Normal";
   if (trip) { state = "bad"; text = "Overload"; }
   else if (percent >= 85) { state = "warn"; text = "Tinggi"; }
-  setBadge("loadStatusBadge", text, state, "px-2 py-0.5 rounded-full font-label-telemetry text-label-telemetry uppercase tracking-wider");
+  setBadge("loadStatusBadge", text, state, BADGE_BASE + " uppercase");
+  setGaugeTone("gauge-watt", state);
 }
 
 function updateDashboard() {
@@ -97,8 +104,6 @@ function updateDashboard() {
   setText("metric-limit", `${Math.round(limit)} Watt`);
   setText("metric-remaining", `${Math.round(remaining)} Watt`);
   setGauge("gauge-watt", CIRC_LARGE, powerPercent);
-  setText("watt-percent-small", `${powerPercent.toFixed(0)}%`);
-  setGauge("gauge-kwh", CIRC_SMALL, powerPercent);
   setLoadBadge(powerPercent, meter.trip);
 
   setText("metric-kwh", format(meter.energy, 3));
@@ -132,8 +137,9 @@ function updateDashboard() {
   setText("metric-chip", hasChip ? format(chip, 1) : "-");
   setGauge("gauge-chip", CIRC_SMALL, hasChip ? rangePercent(chip, 30, 90) : 0);
   setText("chip-label", !hasChip ? "Belum tersedia" : chip >= 85 ? "Terlalu panas" : chip >= 70 ? "Hangat" : "Normal");
+  setGaugeTone("gauge-chip", !hasChip || chip < 70 ? "good" : chip < 85 ? "warn" : "bad");
 
-  setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", "font-label-telemetry text-label-telemetry px-2.5 py-0.5 rounded-full font-semibold");
+  setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", BADGE_BASE);
 }
 
 // A fixed baseline scale instead of auto-fitting to whatever's in the
@@ -186,6 +192,8 @@ function renderChart() {
   const values = dataMap[chartState.metric] || [];
   const { min, max } = getMetricRange(chartState.metric, values);
   const { line, area, lastX, lastY } = buildPath(values, min, max);
+  const emptyEl = $("chart-empty");
+  if (emptyEl) emptyEl.hidden = values.length > 0;
   const lineEl = $("telemetry-line");
   const areaEl = $("telemetry-area");
   const dotEl = $("telemetry-dot");
@@ -216,7 +224,9 @@ function applyStatus(data) {
   // smartmeter/data is retained, so it can arrive even when the device is
   // known offline (smartmeter/status) — don't render it as if it were live.
   if (!deviceOnline) return;
-  lastPacketAt = Date.now();
+  const now = Date.now();
+  if (lastPacketAt) lastIntervalMs = now - lastPacketAt;
+  lastPacketAt = now;
   updateDashboard();
   updateChart();
 }
@@ -270,30 +280,16 @@ function setupChartTabs() {
   const tabs = [$("tab-watt"), $("tab-volt"), $("tab-amp")].filter(Boolean);
   tabs.forEach((btn) => {
     btn.addEventListener("click", () => {
-      tabs.forEach((t) => { t.classList.remove("bg-primary", "text-on-primary", "font-bold"); t.classList.add("text-on-surface-variant"); });
-      btn.classList.add("bg-primary", "text-on-primary", "font-bold");
-      btn.classList.remove("text-on-surface-variant");
+      tabs.forEach((t) => {
+        t.classList.remove("bg-btn", "text-on-btn");
+        t.classList.add("text-ink-2");
+        t.setAttribute("aria-pressed", "false");
+      });
+      btn.classList.add("bg-btn", "text-on-btn");
+      btn.classList.remove("text-ink-2");
+      btn.setAttribute("aria-pressed", "true");
       chartState.metric = btn.dataset.metric;
       renderChart();
-    });
-  });
-}
-
-function setupBottomNav() {
-  document.querySelectorAll(".nav-tab").forEach((tab) => {
-    tab.addEventListener("click", (event) => {
-      const href = tab.getAttribute("href");
-      if (href && href.startsWith("#") && href.length > 1) {
-        event.preventDefault();
-        $(href.slice(1))?.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else if (href === "#") {
-        event.preventDefault();
-      } else {
-        return; // real link (bill.html), let it navigate.
-      }
-      document.querySelectorAll(".nav-tab").forEach((t) => { t.classList.remove("text-primary", "border-primary"); t.classList.add("text-on-surface-variant", "border-transparent"); });
-      tab.classList.remove("text-on-surface-variant", "border-transparent");
-      tab.classList.add("text-primary", "border-primary");
     });
   });
 }
@@ -301,17 +297,15 @@ function setupBottomNav() {
 window.addEventListener("load", () => {
   updateClock();
   setupChartTabs();
-  setupBottomNav();
   connectMQTT();
   setDeviceStatus(false);
 
-  $("btn-refresh")?.addEventListener("click", () => connectMQTT());
   $("btn-reconnect")?.addEventListener("click", () => connectMQTT());
 
   setInterval(updateClock, 1000);
   setInterval(() => {
     const age = Date.now() - lastPacketAt;
     const fresh = lastPacketAt && age < 2500;
-    setText("fps", fresh ? "1 Hz (Real-time)" : "Menunggu data");
+    setText("fps", fresh && lastIntervalMs ? `Tiap ${(lastIntervalMs / 1000).toFixed(1)} detik` : fresh ? "Data masuk" : "Menunggu data");
   }, 1000);
 });

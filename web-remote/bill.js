@@ -62,7 +62,7 @@ function renderHero() {
 
   $("heroMonthLabel").textContent = `${monthNames[month]} ${year}`;
   $("heroTotal").textContent = formatRupiah(total);
-  $("heroKwhRate").textContent = `${kwh.toFixed(3)} kWh • ${formatRupiah(rate)}/kWh`;
+  $("heroKwhRate").textContent = `${kwh.toFixed(3)} kWh • Rp ${rate.toLocaleString("id-ID", { minimumFractionDigits: 2 })}/kWh`;
 
   const progress = Math.min(100, (day / daysInMonth) * 100);
   const circumference = 314.16;
@@ -73,17 +73,19 @@ function renderHero() {
   $("projectionValue").textContent = total > 0 ? formatRupiah(projected) : "Belum ada data";
 
   const comparisonPct = computeComparisonPercent(year, month, day);
+  // Status sungguhan: dibandingkan dengan bulan lalu pada tanggal yang sama.
   const badge = $("heroBadge");
   const badgeText = $("heroBadgeText");
+  const base = "px-2 py-0.5 rounded-md font-mono text-label text-right";
   if (comparisonPct === null) {
     badgeText.textContent = "Belum ada pembanding";
-    badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-surface-container-high text-on-surface-variant";
+    badge.className = `${base} bg-inset text-ink-2`;
   } else if (comparisonPct <= 0) {
     badgeText.textContent = `Hemat ${Math.abs(comparisonPct).toFixed(1)}%`;
-    badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-primary-container/15 text-primary";
+    badge.className = `${base} bg-accent-soft text-accent-ink`;
   } else {
     badgeText.textContent = `Naik ${comparisonPct.toFixed(1)}%`;
-    badge.className = "inline-flex items-center gap-1 px-2.5 py-1 rounded-full bg-tertiary-container/15 text-tertiary";
+    badge.className = `${base} bg-warn-soft text-warn-ink`;
   }
 }
 
@@ -99,34 +101,34 @@ function computeComparisonPercent(year, month, day) {
 function renderInsight() {
   const now = new Date();
   const pct = computeComparisonPercent(now.getFullYear(), now.getMonth(), now.getDate());
-  const icon = $("insightIcon");
   const text = $("insightText");
   if (pct === null) {
-    icon.textContent = "info";
-    icon.className = "material-symbols-outlined text-[18px] text-secondary shrink-0";
-    text.innerHTML = "Belum cukup data bulan lalu untuk dibandingkan.";
+    text.textContent = "Belum cukup data bulan lalu untuk dibandingkan.";
     return;
   }
   const hemat = pct <= 0;
-  icon.textContent = hemat ? "trending_down" : "trending_up";
-  icon.className = `material-symbols-outlined text-[18px] ${hemat ? "text-primary" : "text-tertiary"} shrink-0`;
-  text.innerHTML = `Penggunaan <span class="${hemat ? "text-primary" : "text-tertiary"} font-semibold">${Math.abs(pct).toFixed(1)}% ${hemat ? "lebih hemat" : "lebih tinggi"}</span> dibandingkan bulan lalu pada periode hari yang sama.`;
+  text.innerHTML = `Penggunaan <span class="${hemat ? "text-accent-ink" : "text-warn-ink"} font-semibold">${Math.abs(pct).toFixed(1)}% ${hemat ? "lebih hemat" : "lebih tinggi"}</span> dibandingkan bulan lalu pada periode hari yang sama.`;
 }
 
 // --- Tren pengeluaran: bar chart 12 bulan ---
 
+let trendScrolled = false;
+
 function renderTrendBars() {
+  let currentCol = null;
   const container = $("trendBars");
+  const keepScroll = container.scrollLeft;
   container.innerHTML = "";
   const now = new Date();
   const totals = monthNames.map((_, m) => getMonthTotal(selectedYear, m));
+  const hasData = totals.some((t) => t > 0);
+  const emptyEl = $("trendEmpty");
+  if (emptyEl) emptyEl.hidden = hasData;
   const dataMax = Math.max(...totals, 1);
   // 20% headroom so the tallest bar doesn't pin to the very top every time —
   // without it, whichever month has any data at all always looks "maxed
   // out" since it's also whatever `max` normalizes against.
   const scaleMax = dataMax * 1.2;
-  $("trendAxisTop").textContent = formatRupiah(scaleMax);
-  $("trendAxisMid").textContent = formatRupiah(scaleMax / 2);
 
   totals.forEach((total, m) => {
     const heightPct = Math.max(4, (total / scaleMax) * 100);
@@ -136,26 +138,41 @@ function renderTrendBars() {
     // Fixed width + shrink-0 (was flex-1) so 12 columns can't be squeezed
     // narrower than their content and silently overflow the card on a
     // phone screen — the container scrolls horizontally instead now.
-    col.className = "flex flex-col items-center shrink-0 w-12 h-full justify-end group";
+    col.className = "flex flex-col items-center shrink-0 w-12 h-full justify-end";
+    // Bulan berjalan memakai aksen; bulan lain netral. Nilai rupiah tampil di semua
+    // bulan yang punya data (tanpa hover, supaya terbaca juga di layar sentuh).
     col.innerHTML = `
-      <span class="font-label-telemetry text-[10px] ${isCurrent ? "text-primary font-semibold" : "text-text-dim opacity-0 group-hover:opacity-100"} transition-opacity">${total > 0 ? formatRupiah(total) : ""}</span>
-      <div class="w-full max-w-[28px] ${isCurrent ? "bg-gradient-to-t from-secondary-container to-primary shadow-md shadow-primary/30" : isFuture ? "bg-surface-container-high opacity-40" : "bg-surface-container-highest hover:bg-secondary/40"} rounded-t transition-all" style="height:${isFuture && total === 0 ? 12 : heightPct}%;"></div>
-      <span class="font-metric-unit text-metric-unit ${isCurrent ? "text-primary font-bold" : "text-on-surface-variant"} mt-2">${monthShort[m]}</span>
+      <span class="font-mono text-[10px] ${isCurrent ? "text-accent-ink font-semibold" : "text-ink-2"} num">${total > 0 ? formatRupiah(total).replace(/Rp\s?/, "") : ""}</span>
+      <div class="w-full max-w-[28px] ${isCurrent ? "bg-accent" : isFuture ? "bg-line" : "bg-ink-2"} rounded-t" style="height:${isFuture && total === 0 ? 4 : heightPct}%;${!isCurrent && !isFuture ? "opacity:.55;" : ""}"></div>
+      <span class="font-mono text-small ${isCurrent ? "text-accent-ink font-bold" : "text-ink-2"} mt-2">${monthShort[m]}</span>
     `;
     container.appendChild(col);
+    if (isCurrent) currentCol = col;
   });
+
+  // Dua belas kolom lebih lebar dari kartu di layar HP, jadi geser sekali ke
+  // bulan berjalan supaya itu yang terlihat. Setelah itu posisi geser pengguna dibiarkan.
+  if (currentCol && hasData && !trendScrolled) {
+    trendScrolled = true;
+    // Tunggu satu frame: saat pertama dimuat, gaya Tailwind belum tentu sudah dipasang.
+    requestAnimationFrame(() => {
+      container.scrollLeft = currentCol.offsetLeft - container.clientWidth / 2 + currentCol.offsetWidth / 2;
+    });
+  } else {
+    container.scrollLeft = keepScroll;
+  }
 }
 
 // --- Rincian mingguan: tab bulan + kartu minggu ---
 
 function weekStatusLabel(bill, weekBills, isCurrentWeek) {
-  if (isCurrentWeek) return { text: "Berjalan", cls: "text-secondary" };
+  if (isCurrentWeek) return { text: "Berjalan", cls: "text-ink-2" };
   const valid = weekBills.filter((b) => b > 0);
-  if (!valid.length || bill <= 0) return { text: "-", cls: "text-text-dim" };
+  if (!valid.length || bill <= 0) return { text: "-", cls: "text-ink-2" };
   const avg = valid.reduce((s, v) => s + v, 0) / valid.length;
-  if (bill > avg * 1.15) return { text: "Puncak Pemakaian", cls: "text-tertiary" };
-  if (bill < avg * 0.85) return { text: "Hemat", cls: "text-primary" };
-  return { text: "Stabil", cls: "text-primary" };
+  if (bill > avg * 1.15) return { text: "Puncak Pemakaian", cls: "text-warn-ink" };
+  if (bill < avg * 0.85) return { text: "Hemat", cls: "text-accent-ink" };
+  return { text: "Stabil", cls: "text-accent-ink" };
 }
 
 function renderMonthTabs() {
@@ -167,6 +184,7 @@ function renderMonthTabs() {
     btn.dataset.month = m;
     btn.textContent = label;
     btn.className = tabClass(m === selectedMonth);
+    btn.setAttribute("aria-pressed", String(m === selectedMonth));
     btn.addEventListener("click", () => {
       selectedMonth = m;
       renderMonthTabs();
@@ -178,8 +196,8 @@ function renderMonthTabs() {
 
 function tabClass(active) {
   return active
-    ? "px-3.5 py-1.5 rounded-lg bg-primary text-on-primary font-label-telemetry text-label-telemetry uppercase font-bold shadow-md shadow-primary/20 shrink-0"
-    : "px-3.5 py-1.5 rounded-lg bg-surface-container text-on-surface-variant font-label-telemetry text-label-telemetry uppercase transition-all hover:bg-surface-container-high shrink-0";
+    ? "min-h-[44px] px-3.5 rounded-lg bg-btn text-on-btn font-mono text-label shrink-0"
+    : "min-h-[44px] px-3.5 rounded-lg bg-card border border-line text-ink-2 hover:text-ink font-mono text-label shrink-0";
 }
 
 function renderWeekCards() {
@@ -202,21 +220,16 @@ function renderWeekCards() {
     if (bill > 0 || currentWeek === w + 1) hasAny = true;
 
     const card = document.createElement("div");
-    card.className = "w-full rounded-xl bg-surface-container p-gutter-sm flex items-center justify-between hover:bg-surface-container-high transition-colors";
+    // Minggu berjalan diberi bingkai aksen supaya langsung terlihat; minggu lain netral.
+    card.className = `w-full rounded-xl bg-card border ${currentWeek === w + 1 ? "border-accent" : "border-line"} p-3 flex items-center justify-between gap-2`;
     card.innerHTML = `
-      <div class="flex items-center gap-3">
-        <div class="w-10 h-10 rounded-lg bg-surface-charcoal flex flex-col items-center justify-center shrink-0">
-          <span class="font-label-telemetry text-[10px] text-text-dim leading-none">MGG</span>
-          <span class="font-title-md text-title-md text-secondary font-bold leading-none">${String(w + 1).padStart(2, "0")}</span>
-        </div>
-        <div class="flex flex-col">
-          <span class="font-body-md text-body-md text-on-surface font-semibold">Minggu ${w + 1} (${start.toLocaleDateString("id-ID")} - ${end.toLocaleDateString("id-ID")})</span>
-          <span class="font-metric-unit text-metric-unit text-text-dim">${kwh.toFixed(1)} kWh</span>
-        </div>
+      <div class="flex flex-col min-w-0">
+        <span class="text-body text-ink font-semibold">Minggu ${w + 1}</span>
+        <span class="font-mono text-small text-ink-2 num">${start.toLocaleDateString("id-ID")} - ${end.toLocaleDateString("id-ID")} &bull; ${kwh.toFixed(1)} kWh</span>
       </div>
-      <div class="flex flex-col items-end">
-        <span class="font-headline-metric-mobile text-[18px] ${currentWeek === w + 1 ? "text-primary" : "text-on-surface"} font-semibold">${formatRupiah(bill)}</span>
-        <span class="font-label-telemetry text-label-telemetry ${status.cls}">${status.text}</span>
+      <div class="flex flex-col items-end shrink-0">
+        <span class="text-title ${currentWeek === w + 1 ? "text-accent-ink" : "text-ink"} num">${formatRupiah(bill)}</span>
+        <span class="font-mono text-label ${status.cls}">${status.text}</span>
       </div>
     `;
     container.appendChild(card);
@@ -224,7 +237,7 @@ function renderWeekCards() {
 
   if (!hasAny) {
     const empty = document.createElement("div");
-    empty.className = "w-full rounded-xl bg-surface-container p-card-pad text-center text-on-surface-variant font-body-sm text-body-sm";
+    empty.className = "w-full rounded-xl bg-card border border-line p-5 text-center text-ink-2 text-small";
     empty.textContent = "Belum ada data tagihan mingguan untuk bulan ini.";
     container.appendChild(empty);
   }
@@ -346,6 +359,16 @@ function renderAll() {
 // --- MQTT ---
 
 let mqttClient = null;
+
+// Status koneksi browser ke broker (halaman ini tidak tahu status perangkat).
+function setBrokerState(label, ok) {
+  const text = $("brokerBadge");
+  const dot = $("brokerDot");
+  text.textContent = label;
+  text.style.color = ok ? "var(--accent-ink)" : "var(--bad-ink)";
+  if (dot) dot.style.background = ok ? "var(--accent)" : "var(--bad)";
+}
+
 function connectMQTT() {
   mqttClient = mqtt.connect(MQTT_WS_URL, {
     username: MQTT_USERNAME,
@@ -354,12 +377,13 @@ function connectMQTT() {
     reconnectPeriod: 3000,
   });
   mqttClient.on("connect", () => {
-    $("brokerBadge").textContent = "Terhubung";
+    setBrokerState("Terhubung", true);
     mqttClient.subscribe(TOPIC_BILLING_DAILY);
     mqttClient.subscribe(TOPIC_BILLING_WEEKLY);
   });
-  mqttClient.on("reconnect", () => { $("brokerBadge").textContent = "Mencoba ulang"; });
-  mqttClient.on("close", () => { $("brokerBadge").textContent = "Terputus"; });
+  mqttClient.on("reconnect", () => setBrokerState("Mencoba ulang", false));
+  mqttClient.on("close", () => setBrokerState("Terputus", false));
+  mqttClient.on("error", () => setBrokerState("Koneksi bermasalah", false));
   mqttClient.on("message", (topic, message) => {
     try {
       const parsed = JSON.parse(message.toString());

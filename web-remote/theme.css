@@ -1,0 +1,34 @@
+/*
+  Dipakai bersama oleh index.html dan bill.html.
+  Warna dipegang sebagai variabel supaya satu set kelas melayani dua tema.
+  Palet: netral slate + satu aksen hijau (sehat/normal). Amber dan merah
+  hanya muncul sebagai status (hangat, overload, offline), tidak untuk hiasan.
+  Teks memakai varian "-ink" yang lebih gelap agar lolos kontras 4.5:1.
+*/
+:root {
+  --surface: #f8fafc; --card: #ffffff; --inset: #f1f5f9; --line: #e2e8f0; --track: #e2e8f0;
+  --ink: #0f172a; --ink-2: #475569;
+  --accent: #059669; --accent-ink: #047857; --accent-soft: #ecfdf5;
+  --warn: #d97706; --warn-ink: #b45309; --warn-soft: #fffbeb;
+  --bad: #dc2626; --bad-ink: #b91c1c; --bad-soft: #fef2f2;
+  --btn: #047857; --on-btn: #ffffff;
+  color-scheme: light;
+}
+[data-theme="dark"] {
+  --surface: #0b1326; --card: #171f33; --inset: #131b2e; --line: #2d3449; --track: #2d3449;
+  --ink: #dae2fd; --ink-2: #bbcabf;
+  --accent: #4edea3; --accent-ink: #4edea3; --accent-soft: rgba(78,222,163,.12);
+  --warn: #ffb95f; --warn-ink: #ffb95f; --warn-soft: rgba(255,185,95,.12);
+  --bad: #ffb4ab; --bad-ink: #ffb4ab; --bad-soft: rgba(255,180,171,.12);
+  --btn: #4edea3; --on-btn: #003824;
+  color-scheme: dark;
+}
+html, body { margin: 0; padding: 0; background: var(--surface); }
+body { overscroll-behavior: none; }
+.pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
+.pt-safe { padding-top: env(safe-area-inset-top, 0px); }
+:focus-visible { outline: 2px solid var(--accent-ink); outline-offset: 2px; border-radius: 4px; }
+.gauge { transition: stroke-dashoffset .5s ease-out; }
+.num { font-variant-numeric: tabular-nums; }
+[hidden] { display: none !important; }
+@media (prefers-reduced-motion: reduce) { .gauge, * { transition: none !important; } }
