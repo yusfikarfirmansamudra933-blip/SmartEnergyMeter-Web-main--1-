@@ -30,6 +30,7 @@ tailwind.config = { theme: { extend: {
 function setupTheme() {
   const btn = document.getElementById("btn-theme");
   const icon = document.getElementById("btn-theme-icon");
+  const metaColor = document.getElementById("meta-theme-color");
   if (!btn) return;
   const apply = (theme) => {
     document.documentElement.dataset.theme = theme;
@@ -37,6 +38,8 @@ function setupTheme() {
     btn.setAttribute("aria-pressed", String(dark));
     btn.setAttribute("aria-label", dark ? "Ganti ke tema terang" : "Ganti ke tema gelap");
     if (icon) icon.textContent = dark ? "light_mode" : "dark_mode";
+    // Warna bilah status/alamat browser dan splash screen PWA mengikuti warna kartu header.
+    if (metaColor) metaColor.setAttribute("content", dark ? "#171f33" : "#ffffff");
   };
   apply(document.documentElement.dataset.theme === "dark" ? "dark" : "light");
   btn.addEventListener("click", () => {
@@ -46,4 +49,12 @@ function setupTheme() {
   });
 }
 
+// Precache halaman & skrip statis supaya bisa dipasang ke layar utama dan
+// tetap membuka sesuatu saat offline. Data live (MQTT) tetap butuh koneksi.
+function setupServiceWorker() {
+  if (!("serviceWorker" in navigator)) return;
+  navigator.serviceWorker.register("service-worker.js").catch(() => { /* PWA opsional, halaman tetap jalan tanpanya */ });
+}
+
 window.addEventListener("DOMContentLoaded", setupTheme);
+window.addEventListener("load", setupServiceWorker);
