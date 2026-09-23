@@ -3,7 +3,12 @@
 // diambil saat install, seluruh cache.addAll() ikut gagal dan halaman jadi
 // tidak bisa dipasang sama sekali. Skrip CDN tetap lewat jaringan seperti
 // biasa lewat fetch handler di bawah.
-const CACHE_NAME = "SmartEnergyMeterCloud-v1";
+// Naikkan angka versi ini setiap kali isi urls di bawah berubah (termasuk isi
+// index.html/bill.html sendiri) — activate() di bawah menghapus cache versi
+// lama begitu ada versi baru, ini satu-satunya cara device yang sudah
+// menginstal PWA menerima pembaruan. Nama yang sama = cache lama dipakai
+// selamanya walau file di server sudah diganti.
+const CACHE_NAME = "SmartEnergyMeterCloud-v2";
 
 const urls = [
     "./",
