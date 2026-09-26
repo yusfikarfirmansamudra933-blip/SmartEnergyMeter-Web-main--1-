@@ -169,6 +169,10 @@ void mqttBegin()
 
     mqtt.setServer(MQTT_HOST, MQTT_PORT);
 
+    // PubSubClient's default 256-byte buffer fits the live readings but not
+    // the hour of history (about 2.5 KB).
+    mqtt.setBufferSize(4096);
+
     mqtt.setCallback(callback);
 
     Serial.println("MQTT initialized");
@@ -220,6 +224,16 @@ void mqttLoop()
 //==========================================================
 // MQTT PUBLISH
 //==========================================================
+
+bool mqttPublishRetained(const char *topic, const String &payload)
+{
+    if (!mqtt.connected())
+        return false;
+
+    const bool ok = mqtt.publish(topic, payload.c_str(), true);
+    Serial.printf("Publish %s (%u byte): %s\n", topic, payload.length(), ok ? "OK" : "GAGAL");
+    return ok;
+}
 
 void mqttPublish()
 {

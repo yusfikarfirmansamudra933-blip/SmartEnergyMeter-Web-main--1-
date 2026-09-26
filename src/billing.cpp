@@ -63,7 +63,9 @@ void billingLoop()
         return;
 
     struct tm t;
-    gmtime_r(&now, &t);  // offset already applied by configTime, so read fields as local
+    // time() is UTC; configTime() only sets the timezone, which localtime_r
+    // applies. gmtime_r here would put week/month boundaries at 07:00 WIB.
+    localtime_r(&now, &t);
 
     int32_t curMonth = (t.tm_year + 1900) * 100 + (t.tm_mon + 1);
     int week = min((t.tm_mday - 1) / 7 + 1, 5);

@@ -246,46 +246,28 @@
       <p aria-live="polite" class="text-small" hidden id="power-msg" role="status" tabindex="-1"></p>
     </section>
 
-    <section aria-labelledby="h-grafik" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" id="riwayat-section">
-      <div class="flex flex-col gap-3">
-        <div>
-          <span class="font-mono text-label uppercase text-ink-2 block">Riwayat singkat</span>
-          <h2 class="text-title text-ink" id="h-grafik">Grafik realtime</h2>
+    <!-- Mengikuti referensi pemilik: judul + keterangan di kiri, pilihan besaran di kanan,
+         area chart dengan garis grid bernilai. Satu besaran per tampilan karena satuannya berbeda. -->
+    <section aria-labelledby="h-grafik" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4" id="riwayat-section">
+      <div class="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+        <div class="flex flex-col gap-1">
+          <h2 class="text-title text-ink" id="h-grafik">Riwayat 1 jam</h2>
+          <p class="text-small text-ink-2">Rata-rata tiap menit. Titik paling kanan adalah menit terakhir.</p>
         </div>
-        <div aria-label="Pilih besaran grafik" class="flex items-center gap-1 bg-inset p-1 rounded-lg self-start" role="group">
-          <button aria-pressed="true" class="min-h-[44px] px-2.5 rounded-md bg-btn text-on-btn font-mono text-label" data-metric="power" id="tab-watt" type="button">Daya (W)</button>
-          <button aria-pressed="false" class="min-h-[44px] px-2.5 rounded-md text-ink-2 hover:text-ink font-mono text-label" data-metric="voltage" id="tab-volt" type="button">Tegangan (V)</button>
-          <button aria-pressed="false" class="min-h-[44px] px-2.5 rounded-md text-ink-2 hover:text-ink font-mono text-label" data-metric="current" id="tab-amp" type="button">Arus (A)</button>
-        </div>
+        <div aria-label="Pilih besaran grafik" class="grid grid-cols-3 md:flex gap-1 p-1 rounded-lg border border-line shrink-0" id="history-tabs" role="group"></div>
       </div>
-      <div class="w-full bg-inset rounded-lg p-3 flex flex-col gap-2">
-        <div class="flex justify-between items-center text-ink-2">
-          <span class="font-mono text-small num" id="chart-max-label">-</span>
-          <span class="font-mono text-small">40 sampel terakhir</span>
-        </div>
-        <div class="w-full h-28 flex gap-2">
-          <div class="flex flex-col justify-between items-end shrink-0 py-0.5 text-ink-2 font-mono text-small num">
-            <span id="axis-top">-</span>
-            <span id="axis-mid">-</span>
-            <span id="axis-bottom">-</span>
-          </div>
-          <div class="flex-1 min-w-0 relative">
-            <svg aria-hidden="true" class="w-full h-full overflow-visible" preserveAspectRatio="none" viewBox="0 0 300 100">
-              <defs><linearGradient id="chartFill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" style="stop-color:var(--accent);stop-opacity:.22"></stop><stop offset="100%" style="stop-color:var(--accent);stop-opacity:0"></stop></linearGradient></defs>
-              <line style="stroke:var(--line)" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="300" y1="10" y2="10"></line>
-              <line style="stroke:var(--line)" stroke-dasharray="3,3" stroke-width="1" x1="0" x2="300" y1="50" y2="50"></line>
-              <line style="stroke:var(--line)" stroke-width="1" x1="0" x2="300" y1="90" y2="90"></line>
-              <path d="" fill="url(#chartFill)" id="telemetry-area"></path>
-              <path d="" fill="none" id="telemetry-line" style="stroke:var(--accent)" stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" vector-effect="non-scaling-stroke"></path>
-              <circle cx="300" cy="50" id="telemetry-dot" r="4" style="fill:var(--accent)"></circle>
-            </svg>
-            <p class="absolute inset-0 flex items-center justify-center text-small text-ink-2" id="chart-empty">Menunggu data dari perangkat</p>
-          </div>
-        </div>
-        <div class="flex justify-between items-center text-ink-2 font-mono text-small pt-1">
-          <span>Lama</span><span>Sekarang</span>
-        </div>
+
+      <div class="flex items-baseline gap-x-3 gap-y-1 flex-wrap">
+        <span class="text-headline text-ink num" id="history-last">-</span>
+        <span class="font-mono text-small text-ink-2 num" id="history-stats"></span>
       </div>
+
+      <div aria-describedby="history-help" class="relative rounded-lg" id="history-chart" tabindex="0">
+        <svg aria-hidden="true" class="block w-full" height="200" id="history-svg"></svg>
+        <div class="absolute pointer-events-none rounded-md bg-card border border-line px-2 py-1 font-mono text-small text-ink num whitespace-nowrap" hidden id="history-tip"></div>
+        <p class="absolute inset-0 flex items-center justify-center text-center px-6 text-small text-ink-2" id="history-empty" role="status">Memuat riwayat...</p>
+      </div>
+      <p class="text-small text-ink-2" id="history-help">Sentuh atau arahkan kursor ke grafik untuk melihat nilai per menit. Dengan keyboard: fokus ke grafik lalu tekan panah kiri atau kanan.</p>
     </section>
 
     <section aria-labelledby="h-koneksi" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" id="pengaturan-section">
@@ -319,6 +301,7 @@
 </nav>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="history.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

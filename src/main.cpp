@@ -10,6 +10,7 @@
 #include "pzem.h"
 #include "chipTemp.h"
 #include "billing.h"
+#include "history.h"
 #include "wifiManager.h"
 #include "wifiProvision.h"
 #include "webServer.h"
@@ -190,6 +191,8 @@ void loop()
 
         checkPowerLimit();
 
+        historyAddPzemSample();
+
         notifyClients();
 
         Serial.printf(
@@ -207,12 +210,18 @@ void loop()
     {
         chipTempTimer = millis();
         readChipTemperature();
+        if (!standby)
+        {
+            historyAddChipSample();
+        }
     }
 
     if (!standby)
     {
         billingLoop();
     }
+
+    historyLoop();
 
     mqttPublish();
 

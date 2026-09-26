@@ -10,18 +10,16 @@ const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
 const TOPIC_DATA = "smartmeter/data";
 const TOPIC_STATUS = "smartmeter/status";
 const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
+const TOPIC_HISTORY = "smartmeter/history";
 
 // Warna berasal dari variabel CSS di index.html, jadi ikut berganti dengan tema.
 const TONE_STROKE = { good: "var(--accent)", warn: "var(--warn)", bad: "var(--bad)" };
 const BADGE_BASE = "px-2 py-0.5 rounded-md font-mono text-label";
 const CIRC_LARGE = 2 * Math.PI * 68;
 const CIRC_SMALL = 2 * Math.PI * 40;
-const maxPoints = 40;
 
 const $ = id => document.getElementById(id);
 const meter = { voltage: 0, current: 0, power: 0, energy: 0, frequency: 0, pf: 0, va: 0, var: 0, limit: 0, wifi: false, sensor: false, trip: false, chipTemperature: null };
-const powerValues = [], voltageValues = [], currentValues = [];
-const chartState = { metric: "power" };
 let client;
 let lastPacketAt = 0;
 let lastIntervalMs = 0;
@@ -285,83 +283,6 @@ function updateDashboard() {
   setBadge("sensorStatusBadge", meter.sensor ? "Online" : "Tidak terdeteksi", meter.sensor ? "good" : "bad", BADGE_BASE);
 }
 
-// A fixed baseline scale instead of auto-fitting to whatever's in the
-// current data window — auto-fit made the line always stretch to fill the
-// full height (even a current reading jittering by 0.01A looked like a
-// dramatic swing) and the background gridlines were purely decorative
-// since they didn't correspond to any real value. Power/current follow the
-// same limit-based range already used for the round gauges above, so a
-// "70% full" gauge and a trace sitting 70% up the chart mean the same thing.
-//
-// The baseline is a floor, not a ceiling: if a reading actually exceeds it
-// (an overload spike above the configured limit, a voltage sag/surge past
-// 180-250V) the scale expands to fit, with a little headroom, instead of
-// clipping the line flat at the top/bottom and hiding how far out of range
-// things really got.
-function getMetricRange(metric, values) {
-  const limit = Math.max(number(meter.limit), 1);
-  const observedMax = values.length ? Math.max(...values) : 0;
-  const observedMin = values.length ? Math.min(...values) : 0;
-
-  if (metric === "voltage") {
-    const baseMin = 180, baseMax = 250;
-    return {
-      min: Math.min(baseMin, observedMin),
-      max: Math.max(baseMax, observedMax * 1.05),
-    };
-  }
-  if (metric === "current") {
-    return { min: 0, max: Math.max(limit / 220, observedMax * 1.1) };
-  }
-  return { min: 0, max: Math.max(limit, observedMax * 1.1) };
-}
-
-function buildPath(values, min, max) {
-  if (!values.length) return { line: "", area: "", lastX: 300, lastY: 90 };
-  const range = (max - min) || 1;
-  const n = values.length;
-  const stepX = n > 1 ? 300 / (n - 1) : 0;
-  const points = values.map((v, i) => {
-    const clamped = Math.min(max, Math.max(min, v));
-    return [n > 1 ? i * stepX : 300, 90 - ((clamped - min) / range) * 80];
-  });
-  const line = points.map(([x, y], i) => `${i === 0 ? "M" : "L"}${x.toFixed(1)},${y.toFixed(1)}`).join(" ");
-  const [lastX, lastY] = points[points.length - 1];
-  return { line, area: `${line} L${lastX.toFixed(1)},100 L0,100 Z`, lastX, lastY };
-}
-
-function renderChart() {
-  const dataMap = { power: powerValues, voltage: voltageValues, current: currentValues };
-  const values = dataMap[chartState.metric] || [];
-  const { min, max } = getMetricRange(chartState.metric, values);
-  const { line, area, lastX, lastY } = buildPath(values, min, max);
-  const emptyEl = $("chart-empty");
-  if (emptyEl) emptyEl.hidden = values.length > 0;
-  const lineEl = $("telemetry-line");
-  const areaEl = $("telemetry-area");
-  const dotEl = $("telemetry-dot");
-  if (lineEl) lineEl.setAttribute("d", line);
-  if (areaEl) areaEl.setAttribute("d", area);
-  if (dotEl && values.length) { dotEl.setAttribute("cx", lastX.toFixed(1)); dotEl.setAttribute("cy", lastY.toFixed(1)); }
-
-  const unit = chartState.metric === "power" ? "W" : chartState.metric === "voltage" ? "V" : "A";
-  const digits = chartState.metric === "current" ? 2 : 0;
-  setText("axis-top", `${format(max, digits)}${unit}`);
-  setText("axis-mid", `${format(min + (max - min) / 2, digits)}${unit}`);
-  setText("axis-bottom", `${format(min, digits)}${unit}`);
-
-  const observedMax = values.length ? Math.max(...values) : 0;
-  setText("chart-max-label", values.length ? `Puncak ${format(observedMax, digits)}${unit}` : "-");
-}
-
-function updateChart() {
-  powerValues.push(number(meter.power));
-  voltageValues.push(number(meter.voltage));
-  currentValues.push(number(meter.current));
-  if (powerValues.length > maxPoints) { powerValues.shift(); voltageValues.shift(); currentValues.shift(); }
-  renderChart();
-}
-
 function applyStatus(data) {
   Object.assign(meter, data || {});
   // smartmeter/data is retained, so it can arrive even when the device is
@@ -371,7 +292,6 @@ function applyStatus(data) {
   if (lastPacketAt) lastIntervalMs = now - lastPacketAt;
   lastPacketAt = now;
   updateDashboard();
-  updateChart();
 }
 
 function connectMQTT() {
@@ -389,14 +309,24 @@ function connectMQTT() {
     client.subscribe(TOPIC_STATUS);
     client.subscribe(TOPIC_DATA);
     client.subscribe(TOPIC_BILLING_WEEKLY);
+    historyWaiting();
+    // QoS 128 in the grant means the broker refused: the web user has no
+    // Subscribe rule for this topic yet (see README, EMQX setup).
+    client.subscribe(TOPIC_HISTORY, (err, granted) => {
+      if (err || (granted && granted[0] && granted[0].qos === 128)) historyDenied();
+    });
   });
   client.on("reconnect", () => setBrokerStatus("Mencoba ulang…"));
-  client.on("close", () => setBrokerStatus("Terputus dari broker"));
+  client.on("close", () => { setBrokerStatus("Terputus dari broker"); historyDisconnected(); });
   client.on("error", () => setBrokerStatus("Koneksi broker bermasalah"));
   client.on("message", (topic, payload) => {
     if (topic === TOPIC_STATUS) { setDeviceStatus(payload.toString()); return; }
     if (topic === TOPIC_BILLING_WEEKLY) {
       try { applyBillPreview(JSON.parse(payload.toString())); } catch { /* ignore malformed packet */ }
+      return;
+    }
+    if (topic === TOPIC_HISTORY) {
+      try { applyHistory(JSON.parse(payload.toString())); } catch { /* ignore malformed packet */ }
       return;
     }
     if (topic !== TOPIC_DATA) return;
@@ -419,27 +349,9 @@ function applyBillPreview(weeklyData) {
 
 function updateClock() { setText("telemetry-clock", new Date().toLocaleTimeString("id-ID")); }
 
-function setupChartTabs() {
-  const tabs = [$("tab-watt"), $("tab-volt"), $("tab-amp")].filter(Boolean);
-  tabs.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      tabs.forEach((t) => {
-        t.classList.remove("bg-btn", "text-on-btn");
-        t.classList.add("text-ink-2");
-        t.setAttribute("aria-pressed", "false");
-      });
-      btn.classList.add("bg-btn", "text-on-btn");
-      btn.classList.remove("text-ink-2");
-      btn.setAttribute("aria-pressed", "true");
-      chartState.metric = btn.dataset.metric;
-      renderChart();
-    });
-  });
-}
-
 window.addEventListener("load", () => {
   updateClock();
-  setupChartTabs();
+  setupHistoryChart();
   setupPowerCard();
   connectMQTT();
   // Belum ada status dari broker: tampilkan sebagai belum diketahui, bukan offline.

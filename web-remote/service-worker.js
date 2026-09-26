@@ -8,7 +8,7 @@
 // lama begitu ada versi baru, ini satu-satunya cara device yang sudah
 // menginstal PWA menerima pembaruan. Nama yang sama = cache lama dipakai
 // selamanya walau file di server sudah diganti.
-const CACHE_NAME = "SmartEnergyMeterCloud-v4";
+const CACHE_NAME = "SmartEnergyMeterCloud-v5";
 
 const urls = [
     "./",
@@ -16,6 +16,7 @@ const urls = [
     "./bill.html",
     "./script.js",
     "./bill.js",
+    "./history.js",
     "./theme.css",
     "./theme.js",
     "./manifest.json",
