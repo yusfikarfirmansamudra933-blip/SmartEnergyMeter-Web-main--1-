@@ -36,25 +36,31 @@ uint8_t otaPercent=0;
 bool otaResultPending=false;
 bool otaResultSuccess=false;
 
-// Panel power, tracked so the SSD1306 on/off command is only sent on a
-// change. Switched off in standby, back on for normal mode or an OTA upload.
-bool displayPowered=true;
+// Standby can last for hours, and static pixels burn into an OLED over that
+// time, so the standby text steps to a new position every minute.
+const unsigned long STANDBY_SHIFT_MS=60000;
 
-void setDisplayPower(bool on)
+// File scope (not static in oledLoop) so the OTA screen can force a redraw
+// of the standby text once an upload attempt is over.
+bool standbyShown=false;
+
+void drawStandby(uint8_t step)
 {
 
-if(on==displayPowered)
-return;
+const uint8_t x=(step%5)*4;
+const uint8_t y=(step%2)*4;
 
-if(!on)
-{
 display.clearDisplay();
+
+display.setTextSize(2);
+display.setCursor(x+9,y);
+display.print("STANDBY");
+
+display.setTextSize(1);
+display.setCursor(x,y+20);
+display.print("Nyalakan dari web");
+
 display.display();
-}
-
-display.ssd1306_command(on?SSD1306_DISPLAYON:SSD1306_DISPLAYOFF);
-
-displayPowered=on;
 
 }
 
@@ -387,7 +393,8 @@ void oledLoop()
 if(otaActive)
 {
 
-setDisplayPower(true);
+// The OTA screen replaces whatever was drawn; redraw standby text after.
+standbyShown=false;
 
 static uint8_t lastDrawnPercent=255;
 static bool resultDrawn=false;
@@ -427,15 +434,31 @@ return;
 
 }
 
+static uint8_t standbyStep=0;
+static unsigned long standbyMillis=0;
+
 if(standby)
 {
-setDisplayPower(false);
-return;
+
+// Drawn only on entry and on each shift, not every loop like the pages.
+if(!standbyShown||millis()-standbyMillis>=STANDBY_SHIFT_MS)
+{
+if(standbyShown)
+standbyStep++;
+standbyShown=true;
+standbyMillis=millis();
+drawStandby(standbyStep);
 }
 
-if(!displayPowered)
+return;
+
+}
+
+if(standbyShown)
 {
-setDisplayPower(true);
+// Back from standby: restart the page cycle from the live readings.
+standbyShown=false;
+standbyStep=0;
 page=0;
 pageMillis=millis();
 }

@@ -98,7 +98,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 | `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32 — tidak dikirim kalau belum ada pembacaan valid, dll), **retained** |
 | `smartmeter/status` | ESP32/broker → subscriber | `"online"` / `"standby"` / `"offline"`. `"standby"` = pemantauan dijeda dari dashboard (ESP32 tetap terhubung). `"offline"` di-set via MQTT Last Will, jadi otomatis muncul kalau ESP32 putus koneksi tanpa sempat pamit |
 | `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
-| `smartmeter/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED mati, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
+| `smartmeter/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED menampilkan STANDBY, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
 | `smartmeter/telegram/control_lockout` | `api/power.js` internal | Penghitung PIN salah untuk kartu Pemantauan (5 kali salah = terkunci 15 menit), retained |
 | `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
 | `smartmeter/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |

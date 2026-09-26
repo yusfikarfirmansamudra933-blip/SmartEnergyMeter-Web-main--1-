@@ -121,7 +121,7 @@ function renderPowerCard() {
 
   const desc = {
     online: "Aktif. Sensor dan layar OLED menyala, data terkirim tiap detik.",
-    standby: "Standby. Sensor dan layar OLED dimatikan dan data tidak dikirim. ESP32 tetap terhubung, jadi bisa dinyalakan lagi dari sini.",
+    standby: "Standby. Sensor tidak dibaca dan data tidak dikirim, layar OLED menampilkan STANDBY. ESP32 tetap terhubung, jadi bisa dinyalakan lagi dari sini.",
     offline: "Perangkat offline, jadi tidak bisa dikendalikan dari sini.",
   }[deviceState] || "Menunggu status perangkat.";
   setText("power-desc", desc);
