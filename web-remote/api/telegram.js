@@ -387,6 +387,9 @@ async function resolveReply(text) {
 
   try {
     const { status, data } = await fetchDeviceState();
+    if (status === "standby") {
+      return { text: "⏸️ Pemantauan sedang standby (sensor dan layar dimatikan dari dashboard). Nyalakan lagi dari dashboard web." };
+    }
     if (status !== "online" || !data) {
       return { text: "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan." };
     }

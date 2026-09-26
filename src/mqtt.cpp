@@ -33,8 +33,23 @@ const char* TOPIC_STATUS  = "smartmeter/status";
 const char* TOPIC_LIMIT   = "smartmeter/cmd/limit";
 const char* TOPIC_RESTART = "smartmeter/cmd/restart";
 const char* TOPIC_RESET   = "smartmeter/cmd/reset";
+const char* TOPIC_POWER   = "smartmeter/cmd/power";
 const unsigned long PUBLISH_INTERVAL_MS = 1000;
 unsigned long lastPublish = 0;
+
+// smartmeter/status carries one of three values: "online", "standby" (set
+// here) or "offline" (the Last Will, set by the broker). Reusing this topic
+// instead of adding a new one means every consumer that already subscribes
+// to it sees standby without any broker permission changes.
+const char* currentStatus()
+{
+    return standby ? "standby" : "online";
+}
+
+void publishStatus()
+{
+    mqtt.publish(TOPIC_STATUS, currentStatus(), true);
+}
 
 //==========================================================
 // MQTT CALLBACK
@@ -103,6 +118,36 @@ void callback(char* topic, byte* payload, unsigned int length)
 
         ESP.restart();
     }
+
+    //======================================================
+    // STANDBY / ON
+    //======================================================
+
+    else if (String(topic) == TOPIC_POWER)
+    {
+        if (message == "off")
+        {
+            standby = true;
+        }
+        else if (message == "on")
+        {
+            standby = false;
+            // Readings from before standby are stale; publish nothing until
+            // the next PZEM read replaces them.
+            sensorTimer = 0;
+            lastPublish = millis();
+        }
+        else
+        {
+            Serial.println("Perintah power tidak valid");
+            return;
+        }
+
+        Serial.print("Mode : ");
+        Serial.println(currentStatus());
+
+        publishStatus();
+    }
 }
 
 //==========================================================
@@ -150,10 +195,11 @@ void mqttReconnect()
     if (mqtt.connect("ESP32SmartMeter", MQTT_USERNAME, MQTT_PASSWORD,
                       TOPIC_STATUS, 1, true, "offline"))
     {
-        mqtt.publish(TOPIC_STATUS, "online", true);
+        publishStatus();
         mqtt.subscribe(TOPIC_LIMIT);
         mqtt.subscribe(TOPIC_RESTART);
         mqtt.subscribe(TOPIC_RESET);
+        mqtt.subscribe(TOPIC_POWER);
     }
 }
 
@@ -177,7 +223,7 @@ void mqttLoop()
 
 void mqttPublish()
 {
-    if (!mqtt.connected() || millis() - lastPublish < PUBLISH_INTERVAL_MS)
+    if (standby || !mqtt.connected() || millis() - lastPublish < PUBLISH_INTERVAL_MS)
     {
         return;
     }

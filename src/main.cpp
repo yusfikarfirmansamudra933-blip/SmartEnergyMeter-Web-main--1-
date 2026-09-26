@@ -181,8 +181,8 @@ void loop()
         wifiProvisionBegin();
     }
 
-    // Membaca PZEM setiap SENSOR_INTERVAL
-    if (millis() - sensorTimer >= SENSOR_INTERVAL)
+    // Membaca PZEM setiap SENSOR_INTERVAL (tidak dibaca selama standby)
+    if (!standby && millis() - sensorTimer >= SENSOR_INTERVAL)
     {
         sensorTimer = millis();
 
@@ -209,7 +209,10 @@ void loop()
         readChipTemperature();
     }
 
-    billingLoop();
+    if (!standby)
+    {
+        billingLoop();
+    }
 
     mqttPublish();
 

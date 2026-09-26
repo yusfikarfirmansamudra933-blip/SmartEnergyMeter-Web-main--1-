@@ -219,6 +219,33 @@
       </div>
     </section>
 
+    <!-- Kontrol diletakkan tepat di bawah status yang dikendalikannya. Tombol berganti
+         gaya: "Matikan" sekunder (bukan aksi utama halaman), "Nyalakan" primer. -->
+    <section aria-labelledby="h-power" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4" id="power-section">
+      <div class="flex flex-col gap-1">
+        <span class="font-mono text-label uppercase text-ink-2">Kontrol perangkat</span>
+        <h2 class="text-title text-ink" id="h-power">Pemantauan</h2>
+        <p class="text-small text-ink-2" id="power-desc">Menunggu status perangkat.</p>
+      </div>
+
+      <button class="w-full min-h-[44px] py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors" hidden id="btn-power" type="button">
+        <span aria-hidden="true" class="material-symbols-outlined text-[20px]">power_settings_new</span>
+        <span class="text-body" id="btn-power-label">Matikan pemantauan</span>
+      </button>
+
+      <form class="flex flex-col gap-2" hidden id="power-form" novalidate>
+        <label class="text-small text-ink font-semibold" for="power-pin">PIN kontrol</label>
+        <input autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="power-pin" inputmode="numeric" type="password"/>
+        <p class="text-small text-bad-ink" hidden id="power-pin-error">Masukkan PIN dulu.</p>
+        <div class="flex gap-2">
+          <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="power-submit" type="submit">Matikan</button>
+          <button class="min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="power-cancel" type="button">Batal</button>
+        </div>
+      </form>
+
+      <p aria-live="polite" class="text-small" hidden id="power-msg" role="status" tabindex="-1"></p>
+    </section>
+
     <section aria-labelledby="h-grafik" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" id="riwayat-section">
       <div class="flex flex-col gap-3">
         <div>

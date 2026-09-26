@@ -26,6 +26,7 @@ let client;
 let lastPacketAt = 0;
 let lastIntervalMs = 0;
 let deviceOnline = false;
+let deviceState = null; // "online" | "standby" | "offline", null sampai status pertama tiba
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
@@ -59,26 +60,168 @@ function setGaugeTone(id, tone) {
 // walau perangkat sudah mati — kosongkan tampilan saat status bukan "online"
 // supaya tidak terlihat seolah masih data langsung.
 function clearMetricsDisplay() {
+  const standby = deviceState === "standby";
+  const unknown = deviceState === null;
   ["metric-watt", "metric-kwh", "metric-voltage", "metric-current", "metric-freq", "metric-pf", "metric-va", "metric-var", "metric-chip"].forEach((id) => setText(id, "-"));
   ["watt-percent-label", "metric-limit", "metric-remaining", "pf-label"].forEach((id) => setText(id, "-"));
   setText("chip-label", "Belum tersedia");
   ["gauge-watt", "gauge-voltage", "gauge-current", "gauge-freq", "gauge-pf", "gauge-va", "gauge-var", "gauge-chip"].forEach((id) => setGauge(id, id === "gauge-watt" ? CIRC_LARGE : CIRC_SMALL, 0));
   setGaugeTone("gauge-watt", "good");
   setGaugeTone("gauge-chip", "good");
-  setBadge("loadStatusBadge", "Offline", "bad", BADGE_BASE + " uppercase");
-  setBadge("sensorStatusBadge", "Tidak diketahui", "bad", BADGE_BASE);
-  setText("fps", "Perangkat offline");
+  setBadge("loadStatusBadge", standby ? "Standby" : unknown ? "Memeriksa" : "Offline", standby || unknown ? "warn" : "bad", BADGE_BASE + " uppercase");
+  setBadge("sensorStatusBadge", standby ? "Dimatikan" : unknown ? "Memeriksa" : "Tidak diketahui", standby || unknown ? "warn" : "bad", BADGE_BASE);
+  setText("fps", idleDataText());
 }
 
-// Indikator utama (header + subheader): apakah ESP32 sendiri online, dari MQTT
-// Last Will (smartmeter/status) — bukan sekadar koneksi browser ke broker.
-function setDeviceStatus(online) {
-  deviceOnline = online;
+// Teks baris "Pembaruan data" saat tidak ada data langsung.
+function idleDataText() {
+  if (deviceState === "standby") return "Standby";
+  if (deviceState === "offline") return "Perangkat offline";
+  return "Menunggu data";
+}
+
+const STATUS_VIEW = {
+  online: { label: "Online", dot: "var(--accent)", ink: "var(--accent-ink)" },
+  standby: { label: "Standby", dot: "var(--warn)", ink: "var(--warn-ink)" },
+  offline: { label: "Offline", dot: "var(--bad)", ink: "var(--bad-ink)" },
+};
+
+// Indikator header dari smartmeter/status: "online", "standby" (pemantauan
+// dijeda dari kartu Pemantauan), atau "offline" (Last Will dari broker). Ini
+// status ESP32 sendiri, bukan koneksi browser ke broker.
+function setDeviceStatus(state) {
+  deviceState = state === "online" || state === "standby" ? state : "offline";
+  deviceOnline = deviceState === "online";
+  const view = STATUS_VIEW[deviceState];
   const dot = $("headerDot");
-  if (dot) dot.style.background = online ? "var(--accent)" : "var(--bad)";
+  if (dot) dot.style.background = view.dot;
   const headerText = $("headerStatusText");
-  if (headerText) { headerText.textContent = online ? "Online" : "Offline"; headerText.style.color = online ? "var(--accent-ink)" : "var(--bad-ink)"; }
-  if (!online) clearMetricsDisplay();
+  if (headerText) { headerText.textContent = view.label; headerText.style.color = view.ink; }
+  if (!deviceOnline) clearMetricsDisplay();
+  renderPowerCard();
+}
+
+// --- Kartu Pemantauan (standby / nyala lewat api/power.js) ---
+
+const POWER_TIMEOUT_MS = 15000;
+const powerUi = { formOpen: false, sending: false, pendingAction: null, pendingTimer: null };
+
+function setPowerMessage(text, tone) {
+  const el = $("power-msg");
+  if (!el) return;
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.className = `text-small ${tone === "bad" ? "text-bad-ink" : tone === "good" ? "text-accent-ink" : "text-ink-2"}`;
+}
+
+function renderPowerCard() {
+  const btn = $("btn-power");
+  const form = $("power-form");
+  if (!btn || !form) return;
+
+  const desc = {
+    online: "Aktif. Sensor dan layar OLED menyala, data terkirim tiap detik.",
+    standby: "Standby. Sensor dan layar OLED dimatikan dan data tidak dikirim. ESP32 tetap terhubung, jadi bisa dinyalakan lagi dari sini.",
+    offline: "Perangkat offline, jadi tidak bisa dikendalikan dari sini.",
+  }[deviceState] || "Menunggu status perangkat.";
+  setText("power-desc", desc);
+
+  const controllable = deviceState === "online" || deviceState === "standby";
+  const turningOn = deviceState === "standby";
+  btn.hidden = !controllable || powerUi.formOpen || !!powerUi.pendingAction;
+  btn.className = `w-full min-h-[44px] py-3 px-4 rounded-lg flex items-center justify-center gap-2 font-semibold transition-colors ${
+    turningOn ? "bg-btn text-on-btn hover:opacity-90" : "bg-card border border-line text-ink hover:bg-inset"}`;
+  setText("btn-power-label", turningOn ? "Nyalakan pemantauan" : "Matikan pemantauan");
+  setText("power-submit", powerUi.sending ? "Mengirim..." : turningOn ? "Nyalakan" : "Matikan");
+  $("power-submit").disabled = powerUi.sending;
+  form.hidden = !controllable || !powerUi.formOpen;
+  if (!controllable && powerUi.formOpen) powerUi.formOpen = false;
+
+  // Status baru dari perangkat menyelesaikan perintah yang sedang ditunggu.
+  if (powerUi.pendingAction) {
+    const expected = powerUi.pendingAction === "off" ? "standby" : "online";
+    if (deviceState === expected) {
+      clearTimeout(powerUi.pendingTimer);
+      powerUi.pendingAction = null;
+      setPowerMessage(expected === "standby" ? "Pemantauan dimatikan." : "Pemantauan menyala lagi.", "good");
+      renderPowerCard();
+    }
+  }
+}
+
+function openPowerForm() {
+  powerUi.formOpen = true;
+  setPowerMessage("");
+  $("power-pin-error").hidden = true;
+  renderPowerCard();
+  $("power-pin").focus();
+}
+
+function closePowerForm() {
+  powerUi.formOpen = false;
+  setPowerMessage("");
+  $("power-pin").value = "";
+  $("power-pin-error").hidden = true;
+  renderPowerCard();
+  $("btn-power").focus();
+}
+
+function powerErrorText(status, body) {
+  if (status === 401) return `PIN salah. Sisa ${body.attemptsLeft} percobaan.`;
+  if (status === 429) return `Terlalu banyak PIN salah. Coba lagi dalam ${Math.max(1, Math.ceil((body.retryAfterSec || 900) / 60))} menit.`;
+  if (status === 503) return "Kontrol belum diaktifkan di server (CONTROL_PIN belum diatur di Vercel).";
+  return "Gagal mengirim perintah. Periksa koneksi lalu coba lagi.";
+}
+
+async function submitPower(event) {
+  event.preventDefault();
+  const pinInput = $("power-pin");
+  const pin = pinInput.value.trim();
+  if (!pin) { $("power-pin-error").hidden = false; pinInput.focus(); return; }
+
+  const action = deviceState === "standby" ? "on" : "off";
+  powerUi.sending = true;
+  setPowerMessage("");
+  renderPowerCard();
+
+  let status = 0, body = {};
+  try {
+    const res = await fetch("api/power", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, pin }) });
+    status = res.status;
+    body = await res.json().catch(() => ({}));
+  } catch { /* status tetap 0: gagal jaringan */ }
+
+  powerUi.sending = false;
+  pinInput.value = "";
+
+  if (status === 200) {
+    powerUi.formOpen = false;
+    powerUi.pendingAction = action;
+    setPowerMessage("Perintah terkirim. Menunggu perangkat...", "info");
+    powerUi.pendingTimer = setTimeout(() => {
+      powerUi.pendingAction = null;
+      setPowerMessage("Perangkat belum merespons. Periksa koneksinya lalu coba lagi.", "bad");
+      renderPowerCard();
+    }, POWER_TIMEOUT_MS);
+    renderPowerCard();
+    // Form dan tombol tersembunyi selama menunggu: pindahkan fokus ke pesan status.
+    $("power-msg").focus();
+    return;
+  }
+
+  // Terkunci: tutup form, karena PIN apa pun akan ditolak sampai waktunya habis.
+  if (status === 429 || status === 503) powerUi.formOpen = false;
+  setPowerMessage(powerErrorText(status, body), "bad");
+  renderPowerCard();
+  if (powerUi.formOpen) pinInput.focus(); else $("btn-power").focus();
+}
+
+function setupPowerCard() {
+  $("btn-power")?.addEventListener("click", openPowerForm);
+  $("power-cancel")?.addEventListener("click", closePowerForm);
+  $("power-form")?.addEventListener("submit", submitPower);
+  $("power-form")?.addEventListener("keydown", (event) => { if (event.key === "Escape") closePowerForm(); });
+  $("power-pin")?.addEventListener("input", () => { $("power-pin-error").hidden = true; });
 }
 
 // Status baris "Koneksi Broker MQTT": transport browser <-> cloud broker,
@@ -251,7 +394,7 @@ function connectMQTT() {
   client.on("close", () => setBrokerStatus("Terputus dari broker"));
   client.on("error", () => setBrokerStatus("Koneksi broker bermasalah"));
   client.on("message", (topic, payload) => {
-    if (topic === TOPIC_STATUS) { setDeviceStatus(payload.toString() === "online"); return; }
+    if (topic === TOPIC_STATUS) { setDeviceStatus(payload.toString()); return; }
     if (topic === TOPIC_BILLING_WEEKLY) {
       try { applyBillPreview(JSON.parse(payload.toString())); } catch { /* ignore malformed packet */ }
       return;
@@ -297,8 +440,12 @@ function setupChartTabs() {
 window.addEventListener("load", () => {
   updateClock();
   setupChartTabs();
+  setupPowerCard();
   connectMQTT();
-  setDeviceStatus(false);
+  // Belum ada status dari broker: tampilkan sebagai belum diketahui, bukan offline.
+  deviceState = null;
+  clearMetricsDisplay();
+  renderPowerCard();
 
   $("btn-reconnect")?.addEventListener("click", () => connectMQTT());
 
@@ -306,6 +453,7 @@ window.addEventListener("load", () => {
   setInterval(() => {
     const age = Date.now() - lastPacketAt;
     const fresh = lastPacketAt && age < 2500;
+    if (!deviceOnline) { setText("fps", idleDataText()); return; }
     setText("fps", fresh && lastIntervalMs ? `Tiap ${(lastIntervalMs / 1000).toFixed(1)} detik` : fresh ? "Data masuk" : "Menunggu data");
   }, 1000);
 });

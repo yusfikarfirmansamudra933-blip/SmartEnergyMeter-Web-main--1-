@@ -208,7 +208,12 @@ module.exports = async (req, res) => {
     TOPIC_REMINDER, TOPIC_REMINDER_STATE,
   ]);
 
-  const isOffline = values[TOPIC_STATUS] !== "online";
+  // "standby" (sensor paused from the dashboard) is not offline: the device is
+  // still connected, it just isn't publishing, so the retained data is stale.
+  const status = values[TOPIC_STATUS];
+  const isStandby = status === "standby";
+  const isOffline = status !== "online" && !isStandby;
+  const isLive = status === "online";
   let data = null;
   try { data = values[TOPIC_DATA] ? JSON.parse(values[TOPIC_DATA]) : null; } catch { /* ignore */ }
 
@@ -216,7 +221,7 @@ module.exports = async (req, res) => {
   // Telegram chat — it's shared state for bill.html, not a notification.
   let dailyData = safeParse(values[TOPIC_BILLING_DAILY], {});
   let weeklyData = safeParse(values[TOPIC_BILLING_WEEKLY], {});
-  if (!isOffline && data && Number.isFinite(Number(data.energy))) {
+  if (isLive && data && Number.isFinite(Number(data.energy))) {
     const billing = await updateBilling(Number(data.energy), nowWIB(), values);
     dailyData = billing.dailyData;
     weeklyData = billing.weeklyData;
@@ -224,7 +229,7 @@ module.exports = async (req, res) => {
 
   const chatId = values[TOPIC_CHAT_ID];
   if (!chatId) {
-    res.status(200).json({ ok: true, billingUpdated: !isOffline && !!data, skipped: "no chat id registered yet" });
+    res.status(200).json({ ok: true, billingUpdated: isLive && !!data, skipped: "no chat id registered yet" });
     return;
   }
 
@@ -236,6 +241,8 @@ module.exports = async (req, res) => {
   if (isOffline && !alertState.offline) {
     notifications.push("🔴 Smart Energy Meter offline / kehilangan koneksi.");
     newState.offline = true;
+    // Standby does not survive a reboot, so there's nothing to "resume" later.
+    newState.standby = false;
     changed = true;
   } else if (!isOffline && alertState.offline) {
     notifications.push("🟢 Smart Energy Meter online kembali.");
@@ -243,7 +250,19 @@ module.exports = async (req, res) => {
     changed = true;
   }
 
-  if (!isOffline && data) {
+  if (!isOffline) {
+    if (isStandby && !alertState.standby) {
+      notifications.push("⏸️ Pemantauan dihentikan dari dashboard (mode standby).");
+      newState.standby = true;
+      changed = true;
+    } else if (isLive && alertState.standby) {
+      notifications.push("▶️ Pemantauan aktif kembali.");
+      newState.standby = false;
+      changed = true;
+    }
+  }
+
+  if (isLive && data) {
     const overloaded = !!data.trip;
     if (overloaded && !alertState.overload) {
       notifications.push(`⚠️ Daya melebihi batas! ${num(data.power, 0)} W (batas ${num(data.limit, 0)} W)`);
@@ -271,5 +290,5 @@ module.exports = async (req, res) => {
   try { await checkReminder(chatId, nowWIB(), values[TOPIC_REMINDER], values[TOPIC_REMINDER_STATE]); }
   catch (err) { console.error("checkReminder failed:", err); }
 
-  res.status(200).json({ ok: true, isOffline, notifications: notifications.length });
+  res.status(200).json({ ok: true, isOffline, isStandby, notifications: notifications.length });
 };

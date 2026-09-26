@@ -35,6 +35,7 @@ String createStatusJson()
     document["limit"] = powerLimit;
     document["wifi"] = wifiConnected();
     document["sensor"] = sensorOnline;
+    document["standby"] = standby;
     if (chipTempValid)
     {
         document["chipTemperature"] = chipTemperature;

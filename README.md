@@ -87,7 +87,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 |---|---|---|
 | (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
 | `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/data`, `smartmeter/status` saja. **Publish harus di-deny** (topic `#`) |
-| `smartenergymeterbot` | Bot Telegram + `api/monitor.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`, `smartmeter/billing/#`. Publish `smartmeter/cmd/limit`, `smartmeter/telegram/#`, `smartmeter/billing/#` |
+| `smartenergymeterbot` | Bot Telegram, `api/monitor.js`, `api/power.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`, `smartmeter/billing/#`. Publish `smartmeter/cmd/limit`, `smartmeter/cmd/power`, `smartmeter/telegram/#`, `smartmeter/billing/#` |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
 
@@ -96,8 +96,10 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 | Topic | Arah | Isi |
 |---|---|---|
 | `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32 — tidak dikirim kalau belum ada pembacaan valid, dll), **retained** |
-| `smartmeter/status` | broker → subscriber | `"online"` / `"offline"` — di-set via MQTT Last Will, jadi otomatis `"offline"` kalau ESP32 putus koneksi tanpa sempat pamit |
+| `smartmeter/status` | ESP32/broker → subscriber | `"online"` / `"standby"` / `"offline"`. `"standby"` = pemantauan dijeda dari dashboard (ESP32 tetap terhubung). `"offline"` di-set via MQTT Last Will, jadi otomatis muncul kalau ESP32 putus koneksi tanpa sempat pamit |
 | `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
+| `smartmeter/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED mati, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
+| `smartmeter/telegram/control_lockout` | `api/power.js` internal | Penghitung PIN salah untuk kartu Pemantauan (5 kali salah = terkunci 15 menit), retained |
 | `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
 | `smartmeter/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
 | `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained |
@@ -117,6 +119,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
    - `MQTT_USERNAME`, `MQTT_PASSWORD` — kredensial `smartenergymeterweb` (dipakai script.js sisi client, jadi memang publik — makanya harus read-only)
    - `BOT_MQTT_USERNAME`, `BOT_MQTT_PASSWORD` — kredensial `smartenergymeterbot`
    - `TELEGRAM_BOT_TOKEN` — token dari [@BotFather](https://t.me/BotFather)
+   - `CONTROL_PIN` — PIN untuk tombol "Matikan/Nyalakan pemantauan" di dashboard cloud (disarankan minimal 6 angka). Tanpa variabel ini, `api/power.js` menolak semua perintah
 4. Daftarkan webhook bot: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain-vercel>/api/telegram"`
 5. Daftarkan daftar command bot (untuk autocomplete `/` di Telegram) lewat `setMyCommands` — lihat daftar command di bawah.
 6. `GET /api/monitor` harus dipanggil secara berkala — endpoint ini bukan cuma untuk notifikasi (offline/overload), tapi juga **satu-satunya tempat** yang menghitung & menyimpan histori tagihan harian/mingguan (`smartmeter/billing/*`), mengirim ringkasan Telegram (21:00 WIB harian, Minggu 21:00 WIB mingguan), dan mengecek pengingat bayar listrik custom (`/reminder`, jam 08:00 WIB). Kalau endpoint ini tidak pernah dipanggil, histori tagihan tidak akan pernah ter-update dan pengingat custom tidak akan pernah terkirim. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.

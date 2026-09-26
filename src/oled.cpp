@@ -36,6 +36,28 @@ uint8_t otaPercent=0;
 bool otaResultPending=false;
 bool otaResultSuccess=false;
 
+// Panel power, tracked so the SSD1306 on/off command is only sent on a
+// change. Switched off in standby, back on for normal mode or an OTA upload.
+bool displayPowered=true;
+
+void setDisplayPower(bool on)
+{
+
+if(on==displayPowered)
+return;
+
+if(!on)
+{
+display.clearDisplay();
+display.display();
+}
+
+display.ssd1306_command(on?SSD1306_DISPLAYON:SSD1306_DISPLAYOFF);
+
+displayPowered=on;
+
+}
+
 void drawHeader(String title)
 {
 
@@ -365,6 +387,8 @@ void oledLoop()
 if(otaActive)
 {
 
+setDisplayPower(true);
+
 static uint8_t lastDrawnPercent=255;
 static bool resultDrawn=false;
 
@@ -401,6 +425,19 @@ drawOtaProgress(otaPercent);
 
 return;
 
+}
+
+if(standby)
+{
+setDisplayPower(false);
+return;
+}
+
+if(!displayPowered)
+{
+setDisplayPower(true);
+page=0;
+pageMillis=millis();
 }
 
 if(

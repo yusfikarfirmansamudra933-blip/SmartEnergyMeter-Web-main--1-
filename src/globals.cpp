@@ -14,6 +14,7 @@ float powerLimit = 700;
 
 bool overload = false;
 bool sensorOnline = false;
+bool standby = false;
 
 float chipTemperature = 0;
 bool chipTempValid = false;

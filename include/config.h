@@ -12,7 +12,7 @@
 
 // Bumped manually on each release so /api/status and the OTA panel can show
 // which build is currently running (useful to confirm an update took effect).
-#define FIRMWARE_VERSION "1.12.0"
+#define FIRMWARE_VERSION "1.13.0"
 
 // Tarif listrik (Rp per kWh) untuk halaman Tagihan di OLED.
 #define ELECTRICITY_RATE 1444.70f
