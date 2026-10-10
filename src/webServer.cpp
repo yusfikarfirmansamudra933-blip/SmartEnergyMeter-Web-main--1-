@@ -8,6 +8,7 @@
 #include <cstring>
 
 #include "config.h"
+#include "deviceId.h"
 #include "globals.h"
 #include "oled.h"
 #include "storage.h"
@@ -42,6 +43,7 @@ String createStatusJson()
     }
     document["ip"] = getIPAddress();
     document["version"] = FIRMWARE_VERSION;
+    document["deviceId"] = deviceId();
 
     String json;
     serializeJson(document, json);

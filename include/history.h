@@ -2,7 +2,7 @@
 #define HISTORY_H
 
 // One-minute averages of the live readings for the last hour, published
-// retained on smartmeter/history so the cloud dashboard can draw the full
+// retained on smartmeter/<deviceId>/history so the cloud dashboard can draw the full
 // hour as soon as it opens. A minute with no readings (standby, sensor
 // offline) is kept as a gap rather than a made-up value.
 

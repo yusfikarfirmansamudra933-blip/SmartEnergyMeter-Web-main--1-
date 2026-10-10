@@ -8,7 +8,7 @@
 // lama begitu ada versi baru, ini satu-satunya cara device yang sudah
 // menginstal PWA menerima pembaruan. Nama yang sama = cache lama dipakai
 // selamanya walau file di server sudah diganti.
-const CACHE_NAME = "SmartEnergyMeterCloud-v5";
+const CACHE_NAME = "SmartEnergyMeterCloud-v6";
 
 const urls = [
     "./",
@@ -16,6 +16,7 @@ const urls = [
     "./bill.html",
     "./script.js",
     "./bill.js",
+    "./device.js",
     "./history.js",
     "./theme.css",
     "./theme.js",
@@ -58,14 +59,15 @@ self.addEventListener("activate", event => {
 
 // Data (MQTT/API) tidak pernah lewat sini — cuma halaman dan skrip statis.
 // Cache-first untuk yang sudah dipunya, network untuk sisanya (termasuk
-// semua aset CDN, yang tidak masuk daftar precache).
+// semua aset CDN, yang tidak masuk daftar precache). ignoreSearch: halaman
+// dibuka sebagai index.html?device=sem-..., tetap file yang sama di cache.
 self.addEventListener("fetch", event => {
 
     if (event.request.method !== "GET") return;
 
     event.respondWith(
 
-        caches.match(event.request)
+        caches.match(event.request, { ignoreSearch: true })
             .then(response => response || fetch(event.request))
 
     );

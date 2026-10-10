@@ -48,6 +48,22 @@
       <p class="text-small text-ink-2">Pantau pemakaian listrik dari mana saja lewat cloud.</p>
     </div>
 
+    <!-- Satu dashboard untuk banyak alat: baris ini menunjukkan alat mana yang sedang dipantau.
+         Gaya baris inset sama dengan "Batas daya" supaya terbaca sebagai keterangan, bukan kartu baru. -->
+    <div class="flex flex-col gap-1">
+      <div class="flex items-center justify-between gap-2 rounded-lg bg-inset pl-3 pr-1 py-1">
+        <div class="flex flex-col min-w-0">
+          <span class="font-mono text-label uppercase text-ink-2">Perangkat</span>
+          <span class="font-mono text-body text-ink font-semibold truncate" id="device-id">-</span>
+        </div>
+        <button aria-label="Ganti perangkat" class="shrink-0 min-h-[44px] px-3 rounded-lg flex items-center gap-1.5 text-ink hover:bg-card transition-colors font-semibold" id="btn-device" type="button">
+          <span aria-hidden="true" class="material-symbols-outlined text-[20px]">swap_horiz</span>
+          <span class="text-body">Ganti</span>
+        </button>
+      </div>
+      <p class="text-small text-warn-ink" hidden id="device-note" role="status"></p>
+    </div>
+
     <!-- Fokus utama halaman: daya aktif terhadap batas daya. -->
     <section aria-labelledby="h-daya" class="bg-card rounded-xl p-5 border border-line flex flex-col">
       <div class="flex items-center justify-between">
@@ -235,7 +251,8 @@
 
       <form class="flex flex-col gap-2" hidden id="power-form" novalidate>
         <label class="text-small text-ink font-semibold" for="power-pin">PIN kontrol</label>
-        <input autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="power-pin" inputmode="numeric" type="password"/>
+        <input aria-describedby="power-pin-hint" autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="power-pin" inputmode="numeric" maxlength="6" type="password"/>
+        <p class="text-small text-ink-2" id="power-pin-hint">6 angka di label alat. Tiap alat punya PIN sendiri.</p>
         <p class="text-small text-bad-ink" hidden id="power-pin-error">Masukkan PIN dulu.</p>
         <div class="flex gap-2">
           <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="power-submit" type="submit">Matikan</button>
@@ -301,6 +318,7 @@
 </nav>
 
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="device.js"></script>
 <script src="history.js"></script>
 <script src="script.js"></script>
 </body>

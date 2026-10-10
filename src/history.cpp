@@ -4,6 +4,7 @@
 #include <math.h>
 #include <time.h>
 
+#include "deviceId.h"
 #include "globals.h"
 #include "mqtt.h"
 
@@ -13,7 +14,8 @@ constexpr uint8_t SLOTS = 60;
 constexpr unsigned long BUCKET_MS = 60000;
 constexpr time_t MIN_VALID_EPOCH = 1700000000;  // clock counts as synced after ~Nov 2023
 
-const char *TOPIC_HISTORY = "smartmeter/history";
+// smartmeter/<deviceId>/history, built on first publish.
+String historyTopic;
 
 enum Metric : uint8_t
 {
@@ -128,5 +130,9 @@ void historyLoop()
     // Standby promises no telemetry; the gap minutes still go out with the
     // first publish after monitoring is turned back on.
     if (!standby)
-        mqttPublishRetained(TOPIC_HISTORY, buildJson());
+    {
+        if (historyTopic.isEmpty())
+            historyTopic = deviceTopic("history");
+        mqttPublishRetained(historyTopic.c_str(), buildJson());
+    }
 }

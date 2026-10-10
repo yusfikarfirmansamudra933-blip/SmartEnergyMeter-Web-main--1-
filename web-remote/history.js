@@ -1,6 +1,6 @@
 "use strict";
 
-// Kartu "Riwayat 1 jam": rata-rata per menit dari smartmeter/history (dikirim
+// Kartu "Riwayat 1 jam": rata-rata per menit dari smartmeter/<id>/history (dikirim
 // ESP32 tiap menit, retained). script.js yang memegang koneksi MQTT dan
 // memanggil applyHistory()/historyWaiting()/historyDenied()/historyDisconnected().
 
@@ -128,7 +128,7 @@ function renderHistory() {
   const messages = {
     loading: "Memuat riwayat...",
     empty: "Riwayat belum ada. ESP32 mengirim titik pertama satu menit setelah menyala.",
-    denied: "Dashboard belum diizinkan membaca riwayat. Tambahkan izin Subscribe smartmeter/history di EMQX.",
+    denied: "Dashboard belum diizinkan membaca riwayat. Tambahkan izin Subscribe smartmeter/+/history di EMQX.",
     disconnected: "Tidak terhubung ke broker. Riwayat akan muncul lagi setelah tersambung.",
   };
   if (hist.state !== "ready") {

@@ -27,9 +27,9 @@ void oledOtaVerifyScreen(const char *status);
 
 // Same rule as oledOtaVerifyScreen() — draws immediately, only safe to call
 // from setup() before the normal loop is reachable. Shown for as long as
-// wifiProvisionBegin() blocks waiting for the user to finish setup. apPassword
-// is the random PIN protecting the setup AP itself — only visible here, so
-// only someone standing in front of the device can join it.
-void oledShowProvisioning(const char *apPassword);
+// wifiProvisionBegin() blocks waiting for the user to finish setup. ssid is the
+// setup network to join; apPassword is the random PIN protecting it — only
+// visible here, so only someone standing in front of the device can join it.
+void oledShowProvisioning(const char *ssid, const char *apPassword);
 
 #endif

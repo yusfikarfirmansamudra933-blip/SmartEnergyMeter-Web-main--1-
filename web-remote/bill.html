@@ -46,6 +46,18 @@
       <p class="text-small text-ink-2">Dihitung dari akumulasi energi (kWh) yang dilaporkan perangkat lewat cloud.</p>
     </div>
 
+    <!-- Sama dengan baris perangkat di index.html: tagihan ini milik alat mana. -->
+    <div class="flex items-center justify-between gap-2 rounded-lg bg-inset pl-3 pr-1 py-1">
+      <div class="flex flex-col min-w-0">
+        <span class="font-mono text-label uppercase text-ink-2">Perangkat</span>
+        <span class="font-mono text-body text-ink font-semibold truncate" id="device-id">-</span>
+      </div>
+      <button aria-label="Ganti perangkat" class="shrink-0 min-h-[44px] px-3 rounded-lg flex items-center gap-1.5 text-ink hover:bg-card transition-colors font-semibold" id="btn-device" type="button">
+        <span aria-hidden="true" class="material-symbols-outlined text-[20px]">swap_horiz</span>
+        <span class="text-body">Ganti</span>
+      </button>
+    </div>
+
     <!-- Fokus utama halaman: total biaya bulan berjalan. -->
     <section aria-labelledby="heroMonthLabel" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4">
       <div class="flex items-start justify-between gap-2">
@@ -140,6 +152,7 @@
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="device.js"></script>
 <script src="bill.js"></script>
 </body>
 </html>

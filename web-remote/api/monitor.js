@@ -1,85 +1,46 @@
-const mqtt = require("mqtt");
+const { DEVICE_RE, topic, chatTopic, safeParse, collectRetained, publishOn } = require("../lib/devices");
 
 // Triggered periodically by an external cron (cron-job.org, every few
-// minutes — Vercel Hobby only allows daily cron, see README). Each tick:
+// minutes — Vercel Hobby only allows daily cron, see README). Each tick, for
+// every meter that has ever connected:
 // 1. Computes daily/weekly billing totals from the device's cumulative
 //    energy reading and stores them as retained MQTT state, shared by every
-//    browser that opens bill.html (previously each browser tracked its own
-//    copy in localStorage, so history didn't follow you between devices).
+//    browser that opens bill.html for that device.
 // 2. Pushes Telegram alerts on offline/overload state CHANGES (dedup via
-//    retained alert-state), plus a daily and weekly usage summary at a
-//    fixed time.
-const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
-const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
-const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
+//    retained alert-state) to every chat linked to that device, plus a daily
+//    and weekly usage summary at a fixed time.
+// Devices are discovered from the broker itself (smartmeter/+/status), so a
+// new unit needs no registration here.
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
-const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
-const TOPIC_ALERT_STATE = "smartmeter/telegram/alert_state";
-const TOPIC_SUMMARY_STATE = "smartmeter/telegram/summary_state";
-const TOPIC_REMINDER = "smartmeter/telegram/reminder";
-const TOPIC_REMINDER_STATE = "smartmeter/telegram/reminder_state";
-const REMINDER_HOUR_WIB = 8;
-const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
-const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
-const TOPIC_BILLING_DAILY_START = "smartmeter/billing/daily_start";
-const TOPIC_BILLING_WEEKLY_START = "smartmeter/billing/weekly_start";
+const FILTERS = [
+  "smartmeter/+/status",
+  "smartmeter/+/data",
+  "smartmeter/+/billing/#",
+  "smartmeter/+/telegram/#",
+  "smartmeter/_bot/chat/+",
+];
 
+// Topics from the single-device firmware (before 1.15.0). Carried over once
+// into the first device that shows up under the new layout, then cleared.
+const LEGACY = {
+  "billing/daily": "smartmeter/billing/daily",
+  "billing/weekly": "smartmeter/billing/weekly",
+  "billing/daily_start": "smartmeter/billing/daily_start",
+  "billing/weekly_start": "smartmeter/billing/weekly_start",
+  "telegram/alert_state": "smartmeter/telegram/alert_state",
+  "telegram/summary_state": "smartmeter/telegram/summary_state",
+  "telegram/reminder": "smartmeter/telegram/reminder",
+  "telegram/reminder_state": "smartmeter/telegram/reminder_state",
+};
+const LEGACY_CHAT_ID = "smartmeter/telegram/chatid";
+const LEGACY_CLEAR_ONLY = ["smartmeter/data", "smartmeter/status", "smartmeter/history", "smartmeter/telegram/control_lockout"];
+
+const REMINDER_HOUR_WIB = 8;
 // No per-user rate setting exists (no UI for it) — this is the single
-// source of truth now, matching the old client-side default in bill.js.
+// source of truth, matching bill.js.
 const ELECTRICITY_RATE = 1444.7;
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
-
-function connectBot() {
-  return mqtt.connect(MQTT_WS_URL, {
-    username: BOT_MQTT_USERNAME,
-    password: BOT_MQTT_PASSWORD,
-    clientId: "monitor-" + Math.random().toString(16).slice(2),
-    connectTimeout: 4000,
-  });
-}
-
-// Subscribes to several retained topics at once and resolves once each has
-// produced a value or the timeout elapses (missing topics resolve as null).
-function fetchRetained(topics, timeoutMs = 6000) {
-  return new Promise((resolve) => {
-    const client = connectBot();
-    const values = {};
-    topics.forEach((t) => { values[t] = null; });
-
-    const finish = () => {
-      clearTimeout(timer);
-      client.end(true);
-      resolve(values);
-    };
-
-    const timer = setTimeout(finish, timeoutMs);
-
-    client.on("connect", () => topics.forEach((t) => client.subscribe(t)));
-    client.on("message", (topic, payload) => {
-      values[topic] = payload.toString();
-      if (topics.every((t) => values[t] !== null)) finish();
-    });
-    client.on("error", finish);
-  });
-}
-
-function publishAndWait(topic, message, { retain = false } = {}) {
-  return new Promise((resolve, reject) => {
-    const client = connectBot();
-    const timer = setTimeout(() => { client.end(true); reject(new Error("Timeout saat publish")); }, 4000);
-    client.on("connect", () => {
-      client.publish(topic, String(message), { retain, qos: 1 }, (err) => {
-        clearTimeout(timer);
-        client.end(true);
-        if (err) reject(err); else resolve();
-      });
-    });
-    client.on("error", (err) => { clearTimeout(timer); client.end(true); reject(err); });
-  });
-}
 
 async function sendTelegramMessage(chatId, text) {
   await fetch(`https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`, {
@@ -91,7 +52,6 @@ async function sendTelegramMessage(chatId, text) {
 
 function num(value, digits) { return Number(value || 0).toFixed(digits); }
 function formatRupiah(value) { return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0); }
-function safeParse(str, fallback) { try { return str ? JSON.parse(str) : fallback; } catch { return fallback; } }
 
 // WIB (UTC+7) wall-clock time as a Date whose getUTC* fields read as WIB —
 // avoids depending on the serverless runtime's local timezone.
@@ -100,17 +60,42 @@ function dayKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 
 function monthKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`; }
 function weekOfMonth(d) { return Math.min(Math.floor((d.getUTCDate() - 1) / 7) + 1, 5); }
 
+// One device's view of the tick: its retained values (keyed by the topic
+// suffix, e.g. "billing/daily"), a way to save them, and its Telegram chats.
+function makeDevice(id, values, client, chats) {
+  const linked = Object.entries(chats).filter(([, rec]) => rec.devices.includes(id));
+  return {
+    id,
+    get: (suffix) => values[suffix] || null,
+    save: async (suffix, value) => {
+      values[suffix] = value;
+      try { await publishOn(client, topic(id, suffix), value, { retain: true }); }
+      catch (err) { console.error(`Failed to save ${id}/${suffix}:`, err); }
+    },
+    chatIds: linked.map(([chatId]) => chatId),
+    // Owners with several units see which one a message is about.
+    label: (chatId) => (chats[chatId].devices.length > 1 ? `[${id}] ` : ""),
+  };
+}
+
+async function notify(device, text) {
+  for (const chatId of device.chatIds) {
+    try { await sendTelegramMessage(chatId, device.label(chatId) + text); }
+    catch (err) { console.error("sendTelegramMessage failed:", err); }
+  }
+}
+
 // Computes today's/this-week's usage from the device's cumulative energy
 // counter and republishes the shared billing state if anything changed.
-async function updateBilling(energy, wib, values) {
+async function updateBilling(device, energy, wib) {
   const dayKey = dayKeyOf(wib);
   const monthKey = monthKeyOf(wib);
   const week = weekOfMonth(wib);
 
-  const dailyStart = safeParse(values[TOPIC_BILLING_DAILY_START], {});
-  const weeklyStart = safeParse(values[TOPIC_BILLING_WEEKLY_START], {});
-  const dailyData = safeParse(values[TOPIC_BILLING_DAILY], {});
-  const weeklyData = safeParse(values[TOPIC_BILLING_WEEKLY], {});
+  const dailyStart = safeParse(device.get("billing/daily_start"), {});
+  const weeklyStart = safeParse(device.get("billing/weekly_start"), {});
+  const dailyData = safeParse(device.get("billing/daily"), {});
+  const weeklyData = safeParse(device.get("billing/weekly"), {});
   let changed = false;
 
   if (dailyStart[dayKey] === undefined) { dailyStart[dayKey] = energy; changed = true; }
@@ -129,11 +114,11 @@ async function updateBilling(energy, wib, values) {
 
   if (changed) {
     await Promise.all([
-      publishAndWait(TOPIC_BILLING_DAILY_START, JSON.stringify(dailyStart), { retain: true }),
-      publishAndWait(TOPIC_BILLING_WEEKLY_START, JSON.stringify(weeklyStart), { retain: true }),
-      publishAndWait(TOPIC_BILLING_DAILY, JSON.stringify(dailyData), { retain: true }),
-      publishAndWait(TOPIC_BILLING_WEEKLY, JSON.stringify(weeklyData), { retain: true }),
-    ]).catch((err) => console.error("Failed to save billing state:", err));
+      device.save("billing/daily_start", JSON.stringify(dailyStart)),
+      device.save("billing/weekly_start", JSON.stringify(weeklyStart)),
+      device.save("billing/daily", JSON.stringify(dailyData)),
+      device.save("billing/weekly", JSON.stringify(weeklyData)),
+    ]);
   }
 
   return { dailyData, weeklyData };
@@ -142,19 +127,18 @@ async function updateBilling(energy, wib, values) {
 // Sends a once-a-day recap (21:00 WIB) and a once-a-week recap (Sunday
 // 21:00 WIB), each guarded by a retained "already sent today" date so a
 // 5-minute cron doesn't fire it more than once.
-async function checkSummaries(chatId, wib, dailyData, weeklyData, summaryStateRaw) {
-  const state = safeParse(summaryStateRaw, {});
+async function checkSummaries(device, wib, dailyData, weeklyData) {
+  const state = safeParse(device.get("telegram/summary_state"), {});
   const todayKey = dayKeyOf(wib);
   const hour = wib.getUTCHours();
   let changed = false;
 
   if (hour === 21 && state.lastDaily !== todayKey) {
     const rp = Number(dailyData[todayKey] || 0);
-    const kwh = rp / ELECTRICITY_RATE;
-    await sendTelegramMessage(chatId, [
+    await notify(device, [
       "📋 Ringkasan Hari Ini",
       `${wib.getUTCDate()} ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
-      `Energi: ${kwh.toFixed(3)} kWh`,
+      `Energi: ${(rp / ELECTRICITY_RATE).toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
     ].join("\n"));
     state.lastDaily = todayKey;
@@ -162,78 +146,49 @@ async function checkSummaries(chatId, wib, dailyData, weeklyData, summaryStateRa
   }
 
   if (wib.getUTCDay() === 0 && hour === 21 && state.lastWeekly !== todayKey) {
-    const monthKey = monthKeyOf(wib);
     const week = weekOfMonth(wib);
-    const rp = Number((weeklyData[monthKey] || {})["week" + week] || 0);
-    const kwh = rp / ELECTRICITY_RATE;
-    await sendTelegramMessage(chatId, [
+    const rp = Number((weeklyData[monthKeyOf(wib)] || {})["week" + week] || 0);
+    await notify(device, [
       "📅 Ringkasan Minggu Ini",
       `Minggu ${week}, ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
-      `Energi: ${kwh.toFixed(3)} kWh`,
+      `Energi: ${(rp / ELECTRICITY_RATE).toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
     ].join("\n"));
     state.lastWeekly = todayKey;
     changed = true;
   }
 
-  if (changed) {
-    try { await publishAndWait(TOPIC_SUMMARY_STATE, JSON.stringify(state), { retain: true }); }
-    catch (err) { console.error("Failed to save summary state:", err); }
-  }
+  if (changed) await device.save("telegram/summary_state", JSON.stringify(state));
 }
 
 // User-set reminder (day-of-month + message, from the bot's /reminder
 // command) fired once a month at a fixed hour, deduped the same way as
 // checkSummaries: a retained "month already sent" marker.
-async function checkReminder(chatId, wib, reminderRaw, reminderStateRaw) {
-  const reminder = safeParse(reminderRaw, null);
+async function checkReminder(device, wib) {
+  const reminder = safeParse(device.get("telegram/reminder"), null);
   if (!reminder || !reminder.day || !reminder.message) return;
 
-  const state = safeParse(reminderStateRaw, {});
+  const state = safeParse(device.get("telegram/reminder_state"), {});
   const monthKey = monthKeyOf(wib);
   if (wib.getUTCDate() !== reminder.day || wib.getUTCHours() !== REMINDER_HOUR_WIB || state.lastSent === monthKey) {
     return;
   }
 
-  await sendTelegramMessage(chatId, `🔔 Pengingat Pembayaran Listrik\n${reminder.message}`);
+  await notify(device, `🔔 Pengingat Pembayaran Listrik\n${reminder.message}`);
   state.lastSent = monthKey;
-  try { await publishAndWait(TOPIC_REMINDER_STATE, JSON.stringify(state), { retain: true }); }
-  catch (err) { console.error("Failed to save reminder state:", err); }
+  await device.save("telegram/reminder_state", JSON.stringify(state));
 }
 
-module.exports = async (req, res) => {
-  const values = await fetchRetained([
-    TOPIC_STATUS, TOPIC_DATA, TOPIC_CHAT_ID, TOPIC_ALERT_STATE, TOPIC_SUMMARY_STATE,
-    TOPIC_BILLING_DAILY, TOPIC_BILLING_WEEKLY, TOPIC_BILLING_DAILY_START, TOPIC_BILLING_WEEKLY_START,
-    TOPIC_REMINDER, TOPIC_REMINDER_STATE,
-  ]);
-
+async function checkAlerts(device) {
   // "standby" (sensor paused from the dashboard) is not offline: the device is
   // still connected, it just isn't publishing, so the retained data is stale.
-  const status = values[TOPIC_STATUS];
+  const status = device.get("status");
   const isStandby = status === "standby";
   const isOffline = status !== "online" && !isStandby;
   const isLive = status === "online";
-  let data = null;
-  try { data = values[TOPIC_DATA] ? JSON.parse(values[TOPIC_DATA]) : null; } catch { /* ignore */ }
+  const data = safeParse(device.get("data"), null);
 
-  // Billing history tracks regardless of whether anyone has registered a
-  // Telegram chat — it's shared state for bill.html, not a notification.
-  let dailyData = safeParse(values[TOPIC_BILLING_DAILY], {});
-  let weeklyData = safeParse(values[TOPIC_BILLING_WEEKLY], {});
-  if (isLive && data && Number.isFinite(Number(data.energy))) {
-    const billing = await updateBilling(Number(data.energy), nowWIB(), values);
-    dailyData = billing.dailyData;
-    weeklyData = billing.weeklyData;
-  }
-
-  const chatId = values[TOPIC_CHAT_ID];
-  if (!chatId) {
-    res.status(200).json({ ok: true, billingUpdated: isLive && !!data, skipped: "no chat id registered yet" });
-    return;
-  }
-
-  let alertState = safeParse(values[TOPIC_ALERT_STATE], {});
+  const alertState = safeParse(device.get("telegram/alert_state"), {});
   const newState = { ...alertState };
   let changed = false;
   const notifications = [];
@@ -275,20 +230,125 @@ module.exports = async (req, res) => {
     }
   }
 
-  for (const text of notifications) {
-    try { await sendTelegramMessage(chatId, text); } catch (err) { console.error("sendTelegramMessage failed:", err); }
+  for (const text of notifications) await notify(device, text);
+  if (changed) await device.save("telegram/alert_state", JSON.stringify(newState));
+  return notifications.length;
+}
+
+async function processDevice(device) {
+  const status = device.get("status");
+  const isLive = status === "online";
+  const data = safeParse(device.get("data"), null);
+
+  // Billing tracks regardless of whether any Telegram chat is linked — it's
+  // shared state for bill.html, not a notification.
+  let dailyData = safeParse(device.get("billing/daily"), {});
+  let weeklyData = safeParse(device.get("billing/weekly"), {});
+  if (isLive && data && Number.isFinite(Number(data.energy))) {
+    ({ dailyData, weeklyData } = await updateBilling(device, Number(data.energy), nowWIB()));
   }
 
-  if (changed) {
-    try { await publishAndWait(TOPIC_ALERT_STATE, JSON.stringify(newState), { retain: true }); }
-    catch (err) { console.error("Failed to save alert state:", err); }
-  }
+  const result = { id: device.id, status, chats: device.chatIds.length, notifications: 0 };
+  if (!device.chatIds.length) return result;
 
-  try { await checkSummaries(chatId, nowWIB(), dailyData, weeklyData, values[TOPIC_SUMMARY_STATE]); }
+  result.notifications = await checkAlerts(device);
+  try { await checkSummaries(device, nowWIB(), dailyData, weeklyData); }
   catch (err) { console.error("checkSummaries failed:", err); }
-
-  try { await checkReminder(chatId, nowWIB(), values[TOPIC_REMINDER], values[TOPIC_REMINDER_STATE]); }
+  try { await checkReminder(device, nowWIB()); }
   catch (err) { console.error("checkReminder failed:", err); }
+  return result;
+}
 
-  res.status(200).json({ ok: true, isOffline, isStandby, notifications: notifications.length });
+// Merges two { key: value } maps, the device's own values winning.
+function mergeFlat(legacyRaw, ownRaw) {
+  return { ...safeParse(legacyRaw, {}), ...safeParse(ownRaw, {}) };
+}
+
+// Same, one level deeper: { "YYYY-MM": { week1: ... } }.
+function mergeNested(legacyRaw, ownRaw) {
+  const legacy = safeParse(legacyRaw, {});
+  const own = safeParse(ownRaw, {});
+  const out = { ...legacy };
+  for (const [month, weeks] of Object.entries(own)) out[month] = { ...(legacy[month] || {}), ...weeks };
+  return out;
+}
+
+// Moves the pre-1.15.0 single-device state into the one device now on the
+// broker. Skipped while more than one device exists, since it would be a
+// guess which unit the old history belongs to.
+async function migrateLegacy(values, deviceValues, chats, client) {
+  const hasLegacy = Object.values(LEGACY).some((t) => values[t]) || values[LEGACY_CHAT_ID];
+  const ids = Object.keys(deviceValues);
+  if (!hasLegacy || ids.length !== 1) return null;
+
+  const id = ids[0];
+  const own = deviceValues[id];
+  const merged = {
+    "billing/daily": mergeFlat(values[LEGACY["billing/daily"]], own["billing/daily"]),
+    "billing/daily_start": mergeFlat(values[LEGACY["billing/daily_start"]], own["billing/daily_start"]),
+    "billing/weekly": mergeNested(values[LEGACY["billing/weekly"]], own["billing/weekly"]),
+    "billing/weekly_start": mergeNested(values[LEGACY["billing/weekly_start"]], own["billing/weekly_start"]),
+  };
+  for (const [suffix, value] of Object.entries(merged)) {
+    own[suffix] = JSON.stringify(value);
+    await publishOn(client, topic(id, suffix), own[suffix], { retain: true });
+  }
+  for (const suffix of ["telegram/alert_state", "telegram/summary_state", "telegram/reminder", "telegram/reminder_state"]) {
+    const legacy = values[LEGACY[suffix]];
+    if (legacy && !own[suffix]) {
+      own[suffix] = legacy;
+      await publishOn(client, topic(id, suffix), legacy, { retain: true });
+    }
+  }
+
+  // The chat that used the bot before keeps getting this device's alerts.
+  const legacyChat = values[LEGACY_CHAT_ID];
+  if (legacyChat) {
+    const rec = chats[legacyChat] || { active: null, devices: [] };
+    if (!rec.devices.includes(id)) rec.devices.push(id);
+    if (!rec.active) rec.active = id;
+    chats[legacyChat] = rec;
+    await publishOn(client, chatTopic(legacyChat), JSON.stringify(rec), { retain: true });
+  }
+
+  // An empty retained payload deletes the retained message.
+  for (const t of [...Object.values(LEGACY), LEGACY_CHAT_ID, ...LEGACY_CLEAR_ONLY]) {
+    await publishOn(client, t, "", { retain: true });
+  }
+  return id;
+}
+
+module.exports = async (req, res) => {
+  const filters = [...FILTERS, ...Object.values(LEGACY), LEGACY_CHAT_ID];
+  const { values, client } = await collectRetained(filters, { prefix: "monitor" });
+
+  // smartmeter/<id>/<suffix> -> deviceValues[id][suffix]
+  const deviceValues = {};
+  const chats = {};
+  for (const [t, payload] of Object.entries(values)) {
+    const [, first, ...rest] = t.split("/");
+    if (first === "_bot" && rest[0] === "chat" && rest[1]) {
+      const rec = safeParse(payload, null);
+      if (rec && Array.isArray(rec.devices)) chats[rest[1]] = rec;
+    } else if (DEVICE_RE.test(first) && rest.length) {
+      (deviceValues[first] ||= {})[rest.join("/")] = payload;
+    }
+  }
+
+  let migratedTo = null;
+  try { migratedTo = await migrateLegacy(values, deviceValues, chats, client); }
+  catch (err) { console.error("Legacy migration failed:", err); }
+
+  const results = [];
+  for (const [id, vals] of Object.entries(deviceValues)) {
+    // Only devices that have connected at least once (status is set on
+    // connect and by the Last Will); stray billing/telegram leftovers alone
+    // are not a device.
+    if (!vals.status) continue;
+    try { results.push(await processDevice(makeDevice(id, vals, client, chats))); }
+    catch (err) { console.error(`Device ${id} failed:`, err); }
+  }
+
+  client.end();
+  res.status(200).json({ ok: true, migratedTo, devices: results });
 };

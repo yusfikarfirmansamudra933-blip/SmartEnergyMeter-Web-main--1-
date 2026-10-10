@@ -7,6 +7,7 @@
 #include <ArduinoJson.h>
 #include <esp_system.h>
 
+#include "deviceId.h"
 #include "oled.h"
 #include "storage.h"
 #include "webServer.h"
@@ -19,7 +20,9 @@ constexpr uint16_t PORTAL_PORT = 80;
 // stays open for another try.
 constexpr unsigned long CONNECT_TIMEOUT_MS = 15000;
 
-const char *AP_SSID = "SmartMeter-Setup";
+// "SmartMeter-a1b2c3": same suffix as the device ID, so two units in setup
+// mode next to each other are still told apart. Built in wifiProvisionBegin().
+char apSsid[18];
 
 // Random each time setup mode is entered, shown only on the device's own
 // OLED — so joining this network requires standing in front of the physical
@@ -189,10 +192,11 @@ void handleCaptivePortal(AsyncWebServerRequest *request)
 void wifiProvisionBegin()
 {
     generateApPassword();
+    snprintf(apSsid, sizeof(apSsid), "SmartMeter-%s", deviceId() + 4);
 
     Serial.println("===== MODE SETUP WIFI =====");
-    Serial.printf("Sambungkan HP/laptop ke WiFi \"%s\", PIN: %s\n", AP_SSID, apPassword);
-    oledShowProvisioning(apPassword);
+    Serial.printf("Sambungkan HP/laptop ke WiFi \"%s\", PIN: %s\n", apSsid, apPassword);
+    oledShowProvisioning(apSsid, apPassword);
 
     // Only relevant when the button was held during normal operation (not
     // at first boot) — the dashboard's own AsyncWebServer is already bound
@@ -206,7 +210,7 @@ void wifiProvisionBegin()
     // network for repeated attempts while /connect tries the chosen network
     // as a station in the background.
     WiFi.mode(WIFI_AP_STA);
-    WiFi.softAP(AP_SSID, apPassword);
+    WiFi.softAP(apSsid, apPassword);
 
     // Scan once, up front, on the main task — see the cachedScanJson comment
     // above for why this can't happen inside handleScan() instead. Briefly

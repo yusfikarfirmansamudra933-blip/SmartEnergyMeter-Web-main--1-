@@ -1,123 +1,19 @@
-const mqtt = require("mqtt");
+const { normalizeDeviceId, topic, chatTopic, safeParse, fetchRetained, publishAndWait, checkPin } = require("../lib/devices");
 
-// Dedicated bot MQTT user (server-side only, never shipped to the browser).
-// Unlike the public dashboard's read-only user, this one may publish to
-// smartmeter/cmd/limit and smartmeter/telegram/# — see .gitignore'd
-// web-remote/bot-credentials.local.txt for the ACL this user needs.
-const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
-const BOT_MQTT_USERNAME = process.env.BOT_MQTT_USERNAME;
-const BOT_MQTT_PASSWORD = process.env.BOT_MQTT_PASSWORD;
+// Telegram webhook. One bot serves every meter: each chat links itself to a
+// unit with that unit's ID and PIN (printed on its label, see
+// scripts/device-label.js), and commands then go to the chat's active unit.
+// Uses the server-side bot MQTT user (never shipped to the browser); see the
+// README for the ACL it needs.
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
-
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
-const TOPIC_LIMIT_CMD = "smartmeter/cmd/limit";
-const TOPIC_CHAT_ID = "smartmeter/telegram/chatid";
-const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
-// Reminder is user-set (not auto-computed like the daily/weekly summary),
-// so it lives under telegram/# rather than billing/# — see monitor.js for
-// the cron side that actually fires it.
-const TOPIC_REMINDER = "smartmeter/telegram/reminder";
 
 const MIN_LIMIT = 100;
 const MAX_LIMIT = 10000;
 const REMINDER_HOUR_WIB = 8;
-
-function connectBot() {
-  return mqtt.connect(MQTT_WS_URL, {
-    username: BOT_MQTT_USERNAME,
-    password: BOT_MQTT_PASSWORD,
-    clientId: "telegram-bot-" + Math.random().toString(16).slice(2),
-    connectTimeout: 4000,
-  });
-}
-
-// Both topics are retained by the firmware, so a fresh subscribe gets the
-// broker's last known values instantly. TOPIC_STATUS is set via MQTT Last
-// Will, so it reflects true online/offline even if the device dropped off
-// ungracefully — TOPIC_DATA alone would otherwise look "live" forever since
-// it just replays whatever was last published, however old that is.
-function fetchDeviceState(timeoutMs = 4000) {
-  return new Promise((resolve, reject) => {
-    const client = connectBot();
-    let status = null;
-    let data = null;
-
-    const finish = () => {
-      clearTimeout(timer);
-      client.end(true);
-      resolve({ status, data });
-    };
-
-    const timer = setTimeout(finish, timeoutMs);
-
-    client.on("connect", () => {
-      client.subscribe(TOPIC_STATUS);
-      client.subscribe(TOPIC_DATA);
-    });
-
-    client.on("message", (topic, payload) => {
-      if (topic === TOPIC_STATUS) status = payload.toString();
-      if (topic === TOPIC_DATA) {
-        try { data = JSON.parse(payload.toString()); } catch { /* ignore malformed packet */ }
-      }
-      if (status !== null && data !== null) finish();
-    });
-
-    client.on("error", (err) => {
-      clearTimeout(timer);
-      client.end(true);
-      reject(err);
-    });
-  });
-}
-
-function publishAndWait(topic, message, { retain = false } = {}) {
-  return new Promise((resolve, reject) => {
-    const client = connectBot();
-    const timer = setTimeout(() => { client.end(true); reject(new Error("Timeout saat publish")); }, 4000);
-
-    client.on("connect", () => {
-      client.publish(topic, String(message), { retain, qos: 1 }, (err) => {
-        clearTimeout(timer);
-        client.end(true);
-        if (err) reject(err); else resolve();
-      });
-    });
-
-    client.on("error", (err) => {
-      clearTimeout(timer);
-      client.end(true);
-      reject(err);
-    });
-  });
-}
-
-// Reads a single retained topic (or null if nothing was retained / timed out).
-function fetchTopic(topic, timeoutMs = 4000) {
-  return new Promise((resolve) => {
-    const client = connectBot();
-    let value = null;
-    const finish = () => { clearTimeout(timer); client.end(true); resolve(value); };
-    const timer = setTimeout(finish, timeoutMs);
-    client.on("connect", () => client.subscribe(topic));
-    client.on("message", (t, payload) => { if (t === topic) { value = payload.toString(); finish(); } });
-    client.on("error", finish);
-  });
-}
-
-function saveChatId(chatId) {
-  return publishAndWait(TOPIC_CHAT_ID, String(chatId), { retain: true }).catch((err) => {
-    console.error("Failed to save chat id:", err);
-  });
-}
+const PREFIX = "telegram-bot";
 
 function num(value, digits) {
   return Number(value || 0).toFixed(digits);
-}
-
-function safeParse(str, fallback) {
-  try { return str ? JSON.parse(str) : fallback; } catch { return fallback; }
 }
 
 function formatRupiah(value) {
@@ -130,6 +26,112 @@ function formatRupiah(value) {
 function nowWIB() { return new Date(Date.now() + 7 * 60 * 60 * 1000); }
 function dayKeyOf(d) { return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-${String(d.getUTCDate()).padStart(2, "0")}`; }
 
+async function fetchTopic(t) {
+  return (await fetchRetained([t], { prefix: PREFIX }))[t];
+}
+
+// --- Chat <-> device links ---
+
+// { active: "sem-a1b2c3", devices: ["sem-a1b2c3", ...] }
+async function loadChat(chatId) {
+  const rec = safeParse(await fetchTopic(chatTopic(chatId)), null);
+  return rec && Array.isArray(rec.devices) ? rec : { active: null, devices: [] };
+}
+
+function saveChat(chatId, rec) {
+  return publishAndWait(chatTopic(chatId), JSON.stringify(rec), { retain: true, prefix: PREFIX });
+}
+
+// "sem-a1b2c3 123456", "a1b2c3 123456" or the deep-link form "sem-a1b2c3_123456".
+function parseLinkArg(arg) {
+  const match = (arg || "").trim().match(/^(\S+?)[\s_]+(\d{6})$/);
+  if (!match) return null;
+  const deviceId = normalizeDeviceId(match[1]);
+  return deviceId ? { deviceId, pin: match[2] } : null;
+}
+
+const LINK_HELP = [
+  "Hubungkan alat dulu dengan ID dan PIN yang ada di label alat:",
+  "/hubungkan <ID> <PIN>",
+  "Contoh: /hubungkan sem-a1b2c3 123456",
+  "",
+  "ID juga tampil di layar OLED (halaman \"ID sem-...\").",
+].join("\n");
+
+async function handleLink(chatId, rec, arg) {
+  if (!process.env.CONTROL_SECRET) {
+    return "⚠️ Penautan alat belum aktif di server (CONTROL_SECRET belum diatur di Vercel).";
+  }
+  const parsed = parseLinkArg(arg);
+  if (!parsed) return LINK_HELP;
+
+  const check = await checkPin(parsed.deviceId, parsed.pin, PREFIX);
+  if (!check.ok) {
+    if (check.status === 401) return `❌ PIN salah untuk ${parsed.deviceId}. Sisa ${check.body.attemptsLeft} percobaan.`;
+    if (check.status === 429) return `⛔ Terlalu banyak PIN salah untuk ${parsed.deviceId}. Coba lagi dalam ${Math.ceil(check.body.retryAfterSec / 60)} menit.`;
+    return "⚠️ Gagal memeriksa PIN. Coba lagi.";
+  }
+
+  if (!rec.devices.includes(parsed.deviceId)) rec.devices.push(parsed.deviceId);
+  rec.active = parsed.deviceId;
+  await saveChat(chatId, rec);
+  const others = rec.devices.length > 1 ? `\nChat ini terhubung ke ${rec.devices.length} alat. Ganti alat aktif dengan /perangkat.` : "";
+  return `✅ Terhubung ke ${parsed.deviceId}. Notifikasi alat ini akan dikirim ke chat ini.${others}`;
+}
+
+function devicesKeyboard(rec) {
+  return {
+    inline_keyboard: rec.devices.map((id) => [{ text: id === rec.active ? `● ${id} (aktif)` : id, callback_data: `pakai ${id}` }]),
+  };
+}
+
+function handleDevices(rec) {
+  if (!rec.devices.length) return { text: LINK_HELP };
+  return {
+    text: [
+      `Alat aktif: ${rec.active}`,
+      "Tekan alat lain untuk menjadikannya aktif.",
+      "/hubungkan <ID> <PIN> untuk menambah alat, /lepas untuk melepas alat aktif.",
+    ].join("\n"),
+    keyboard: devicesKeyboard(rec),
+  };
+}
+
+async function handleUse(chatId, rec, arg) {
+  const deviceId = normalizeDeviceId(arg);
+  if (!deviceId || !rec.devices.includes(deviceId)) {
+    return "Alat itu belum terhubung ke chat ini. Pakai /hubungkan <ID> <PIN> dulu.";
+  }
+  rec.active = deviceId;
+  await saveChat(chatId, rec);
+  return `✅ Alat aktif sekarang ${deviceId}.`;
+}
+
+async function handleUnlink(chatId, rec) {
+  if (!rec.active) return LINK_HELP;
+  const removed = rec.active;
+  rec.devices = rec.devices.filter((id) => id !== removed);
+  rec.active = rec.devices[0] || null;
+  await saveChat(chatId, rec);
+  return rec.active
+    ? `🔓 ${removed} dilepas. Alat aktif sekarang ${rec.active}.`
+    : `🔓 ${removed} dilepas. Chat ini tidak terhubung ke alat apa pun lagi.`;
+}
+
+// --- Device data ---
+
+// Both topics are retained by the firmware, so a fresh subscribe gets the
+// broker's last known values instantly. status is set via MQTT Last Will, so
+// it reflects true online/offline even if the device dropped off
+// ungracefully — data alone would otherwise look "live" forever since it
+// just replays whatever was last published, however old that is.
+async function fetchDeviceState(deviceId) {
+  const statusTopic = topic(deviceId, "status");
+  const dataTopic = topic(deviceId, "data");
+  const values = await fetchRetained([statusTopic, dataTopic], { prefix: PREFIX });
+  return { status: values[statusTopic], data: safeParse(values[dataTopic], null) };
+}
+
 // chipTemperature is deliberately absent when the ESP32's internal sensor
 // isn't producing real readings, so callers must never fall back to 0.
 function hasChipTemp(data) {
@@ -140,9 +142,9 @@ function chipTempState(c) {
   return c >= 85 ? "terlalu panas" : c >= 70 ? "hangat" : "normal";
 }
 
-function statusText(data) {
+function statusText(data, deviceId) {
   return [
-    "📊 Status Smart Energy Meter",
+    `📊 Status ${deviceId}`,
     `Tegangan: ${num(data.voltage, 1)} V`,
     `Arus: ${num(data.current, 2)} A`,
     `Daya: ${num(data.power, 0)} W`,
@@ -191,6 +193,7 @@ const MENU_KEYBOARD = {
     [{ text: "🌡️ Suhu", callback_data: "suhu" }, { text: "📐 Power Factor", callback_data: "pf" }],
     [{ text: "📊 Status Lengkap", callback_data: "status" }, { text: "🎚️ Batas Daya", callback_data: "limit" }],
     [{ text: "📈 Riwayat 7 Hari", callback_data: "riwayat" }, { text: "🔔 Pengingat", callback_data: "reminder" }],
+    [{ text: "🔁 Ganti Alat", callback_data: "perangkat" }],
   ],
 };
 
@@ -210,25 +213,26 @@ const HELP_TEXT = [
   "/reminder <tanggal> <pesan> - pengingat bayar listrik tiap bulan, contoh: /reminder 25 Jangan lupa bayar listrik!",
   "/reminder - lihat pengingat yang aktif",
   "/reminder off - matikan pengingat",
+  "/perangkat - lihat & ganti alat aktif",
+  "/hubungkan <ID> <PIN> - tambah alat",
+  "/lepas - lepas alat aktif",
   "/menu - tampilkan tombol menu ini lagi",
   "",
-  "Kirim /start sekali supaya saya bisa kirim notifikasi otomatis (offline / kelebihan batas daya).",
+  "Notifikasi otomatis (offline / kelebihan batas daya) dikirim ke chat yang terhubung ke alatnya.",
   "Atau tanya bebas juga bisa, misalnya \"berapa watt sekarang\".",
 ].join("\n");
 
-// Renders the last 7 days of billing history (smartmeter/billing/daily,
-// already computed by api/monitor.js) as a QuickChart bar chart. QuickChart
-// takes the chart spec straight in the URL and Telegram fetches that URL
-// itself for sendPhoto, so no image handling/hosting needed on our side.
-async function handleHistory() {
-  const raw = await fetchTopic(TOPIC_BILLING_DAILY);
-  const dailyData = safeParse(raw, {});
+// Renders the last 7 days of billing history (.../billing/daily, already
+// computed by api/monitor.js) as a QuickChart bar chart. QuickChart takes
+// the chart spec straight in the URL and Telegram fetches that URL itself
+// for sendPhoto, so no image handling/hosting needed on our side.
+async function handleHistory(deviceId) {
+  const dailyData = safeParse(await fetchTopic(topic(deviceId, "billing/daily")), {});
   const wib = nowWIB();
   const days = [];
   for (let i = 6; i >= 0; i--) {
     const d = new Date(wib.getTime() - i * 24 * 60 * 60 * 1000);
-    const key = dayKeyOf(d);
-    days.push({ label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`, rp: Number(dailyData[key] || 0) });
+    days.push({ label: `${d.getUTCDate()}/${d.getUTCMonth() + 1}`, rp: Number(dailyData[dayKeyOf(d)] || 0) });
   }
 
   if (days.every((d) => d.rp === 0)) {
@@ -246,7 +250,7 @@ async function handleHistory() {
   const photoUrl = "https://quickchart.io/chart?w=600&h=350&c=" + encodeURIComponent(JSON.stringify(chartConfig));
   const total = days.reduce((sum, d) => sum + d.rp, 0);
   const text = [
-    "📊 Riwayat 7 Hari Terakhir",
+    `📊 Riwayat 7 Hari Terakhir (${deviceId})`,
     ...days.map((d) => `${d.label}: ${formatRupiah(d.rp)}`),
     "",
     `Total: ${formatRupiah(total)}`,
@@ -264,11 +268,12 @@ function parseReminderArg(arg) {
   return { day, message: match[2].trim() };
 }
 
-async function handleReminder(arg) {
+async function handleReminder(deviceId, arg) {
+  const reminderTopic = topic(deviceId, "telegram/reminder");
   const trimmed = (arg || "").trim();
 
   if (!trimmed) {
-    const reminder = safeParse(await fetchTopic(TOPIC_REMINDER), null);
+    const reminder = safeParse(await fetchTopic(reminderTopic), null);
     if (!reminder) {
       return "🔕 Belum ada pengingat pembayaran.\nSet dengan /reminder <tanggal> <pesan>, contoh: /reminder 25 Jangan lupa bayar listrik!";
     }
@@ -277,7 +282,7 @@ async function handleReminder(arg) {
 
   if (trimmed.toLowerCase() === "off") {
     // Empty retained payload clears it — same convention as a normal MQTT delete.
-    await publishAndWait(TOPIC_REMINDER, "", { retain: true });
+    await publishAndWait(reminderTopic, "", { retain: true, prefix: PREFIX });
     return "🔕 Pengingat pembayaran dimatikan.";
   }
 
@@ -285,8 +290,21 @@ async function handleReminder(arg) {
   if (!parsed) {
     return "Format: /reminder <tanggal 1-28> <pesan>\nContoh: /reminder 25 Jangan lupa bayar listrik!\nAtau /reminder off untuk matikan.";
   }
-  await publishAndWait(TOPIC_REMINDER, JSON.stringify(parsed), { retain: true });
+  await publishAndWait(reminderTopic, JSON.stringify(parsed), { retain: true, prefix: PREFIX });
   return `✅ Pengingat diset: tanggal ${parsed.day} tiap bulan, jam ${REMINDER_HOUR_WIB}:00 WIB\nPesan: "${parsed.message}"`;
+}
+
+async function handleSetLimit(deviceId, arg) {
+  const value = Number(arg);
+  if (!arg || !Number.isFinite(value) || value < MIN_LIMIT || value > MAX_LIMIT) {
+    return `Format: /setlimit <angka>. Contoh: /setlimit 500\nBatas harus antara ${MIN_LIMIT}-${MAX_LIMIT} Watt.`;
+  }
+  try {
+    await publishAndWait(topic(deviceId, "cmd/limit"), value, { prefix: PREFIX });
+    return `✅ Batas daya ${deviceId} diubah ke ${value} Watt.`;
+  } catch {
+    return "⚠️ Gagal mengubah batas daya, perangkat mungkin sedang offline. Coba lagi.";
+  }
 }
 
 // Parses "/setlimit@yusfikar_bot 500" -> { command: "setlimit", arg: "500" }.
@@ -296,9 +314,9 @@ function parseCommand(text) {
   return { command: match[1].toLowerCase(), arg: match[2].trim() };
 }
 
-function formatReply(text, data) {
+function formatReply(text, data, deviceId) {
   const parsed = parseCommand(text);
-  if (parsed && COMMANDS[parsed.command]) return COMMANDS[parsed.command](data);
+  if (parsed && COMMANDS[parsed.command]) return COMMANDS[parsed.command](data, deviceId);
 
   // Free-text fallback for natural-language questions.
   const t = text.toLowerCase();
@@ -310,7 +328,7 @@ function formatReply(text, data) {
   if (/power ?factor|\bpf\b|faktor daya/.test(t)) return COMMANDS.pf(data);
   if (/suhu|temperatur|\bchip\b|prosesor/.test(t)) return COMMANDS.suhu(data);
   if (/batas|limit/.test(t)) return COMMANDS.limit(data);
-  if (/status|semua|kondisi|\bcek\b/.test(t)) return COMMANDS.status(data);
+  if (/status|semua|kondisi|\bcek\b/.test(t)) return COMMANDS.status(data, deviceId);
 
   return parsed
     ? `Perintah /${parsed.command} tidak dikenal. Kirim /help untuk lihat daftar perintah.`
@@ -352,51 +370,45 @@ async function answerCallbackQuery(callbackQueryId) {
   }
 }
 
-async function handleSetLimit(arg) {
-  const value = Number(arg);
-  if (!arg || !Number.isFinite(value) || value < MIN_LIMIT || value > MAX_LIMIT) {
-    return `Format: /setlimit <angka>. Contoh: /setlimit 500\nBatas harus antara ${MIN_LIMIT}-${MAX_LIMIT} Watt.`;
-  }
-  try {
-    await publishAndWait(TOPIC_LIMIT_CMD, value);
-    return `✅ Batas daya diubah ke ${value} Watt.`;
-  } catch {
-    return "⚠️ Gagal mengubah batas daya, perangkat mungkin sedang offline. Coba lagi.";
-  }
-}
-
 // Shared by typed messages and inline-button taps — a button press arrives as
 // "/<callback_data>", so both end up going through the same dispatch.
-async function resolveReply(text) {
+async function resolveReply(chatId, text) {
   const parsed = parseCommand(text);
   const command = parsed ? parsed.command : null;
+  const rec = await loadChat(chatId);
+
+  // A label's QR opens t.me/<bot>?start=<id>_<pin>, which arrives as "/start <id>_<pin>".
+  if ((command === "start" && parsed.arg) || command === "hubungkan" || command === "link") {
+    return { text: await handleLink(chatId, rec, parsed.arg), keyboard: rec.active ? MENU_KEYBOARD : undefined };
+  }
+  if (command === "perangkat" || command === "alat") return handleDevices(rec);
+  if (command === "pakai") return { text: await handleUse(chatId, rec, parsed.arg) };
+  if (command === "lepas") return { text: await handleUnlink(chatId, rec) };
+
+  if (!rec.active) return { text: LINK_HELP };
+  const deviceId = rec.active;
 
   if (command === "start" || command === "help" || command === "menu" || /bantuan|^menu$/i.test(text.trim())) {
-    return { text: HELP_TEXT, keyboard: MENU_KEYBOARD };
+    return { text: `${HELP_TEXT}\n\nAlat aktif: ${deviceId}`, keyboard: MENU_KEYBOARD };
   }
   if (command === "setlimit") {
-    return { text: await handleSetLimit(parsed.arg) };
+    return { text: await handleSetLimit(deviceId, parsed.arg) };
   }
   if (command === "riwayat" || command === "history") {
-    const result = await handleHistory();
-    return { text: result.text, photoUrl: result.photoUrl };
+    return await handleHistory(deviceId);
   }
   if (command === "reminder" || command === "pengingat") {
-    return { text: await handleReminder(parsed.arg) };
+    return { text: await handleReminder(deviceId, parsed.arg) };
   }
 
-  try {
-    const { status, data } = await fetchDeviceState();
-    if (status === "standby") {
-      return { text: "⏸️ Pemantauan sedang standby (sensor dimatikan dari dashboard). Nyalakan lagi dari dashboard web." };
-    }
-    if (status !== "online" || !data) {
-      return { text: "⚠️ Perangkat sedang offline. Coba lagi setelah dinyalakan." };
-    }
-    return { text: formatReply(text, data) };
-  } catch {
-    return { text: "⚠️ Perangkat sedang offline atau data belum tersedia. Coba lagi nanti." };
+  const { status, data } = await fetchDeviceState(deviceId);
+  if (status === "standby") {
+    return { text: `⏸️ Pemantauan ${deviceId} sedang standby (sensor dimatikan dari dashboard). Nyalakan lagi dari dashboard web.` };
   }
+  if (status !== "online" || !data) {
+    return { text: `⚠️ ${deviceId} sedang offline atau datanya belum tersedia. Coba lagi setelah alat menyala.` };
+  }
+  return { text: formatReply(text, data, deviceId) };
 }
 
 module.exports = async (req, res) => {
@@ -418,11 +430,15 @@ module.exports = async (req, res) => {
   }
 
   const chatId = message.chat.id;
-  await saveChatId(chatId);
-
   if (callback) await answerCallbackQuery(callback.id);
 
-  const reply = await resolveReply(text);
+  let reply;
+  try {
+    reply = await resolveReply(chatId, text);
+  } catch (err) {
+    console.error("resolveReply failed:", err);
+    reply = { text: "⚠️ Terjadi gangguan saat menghubungi broker. Coba lagi sebentar lagi." };
+  }
   // Keep the menu attached whenever the user is already in the tap flow, so
   // they never have to fall back to typing to ask the next thing. Typed
   // commands keep their plain replies.

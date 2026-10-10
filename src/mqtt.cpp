@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 
 #include "config.h"
+#include "deviceId.h"
 #include "globals.h"
 
 //==========================================================
@@ -28,19 +29,20 @@ const unsigned long RECONNECT_INTERVAL_MS = 5000;
 // MQTT TOPIC
 //==========================================================
 
-const char* TOPIC_DATA    = "smartmeter/data";
-const char* TOPIC_STATUS  = "smartmeter/status";
-const char* TOPIC_LIMIT   = "smartmeter/cmd/limit";
-const char* TOPIC_RESTART = "smartmeter/cmd/restart";
-const char* TOPIC_RESET   = "smartmeter/cmd/reset";
-const char* TOPIC_POWER   = "smartmeter/cmd/power";
+// All under smartmeter/<deviceId>/, filled in by mqttBegin().
+String TOPIC_DATA;
+String TOPIC_STATUS;
+String TOPIC_LIMIT;
+String TOPIC_RESTART;
+String TOPIC_RESET;
+String TOPIC_POWER;
 const unsigned long PUBLISH_INTERVAL_MS = 1000;
 unsigned long lastPublish = 0;
 
-// smartmeter/status carries one of three values: "online", "standby" (set
-// here) or "offline" (the Last Will, set by the broker). Reusing this topic
-// instead of adding a new one means every consumer that already subscribes
-// to it sees standby without any broker permission changes.
+// .../status carries one of three values: "online", "standby" (set here) or
+// "offline" (the Last Will, set by the broker). Reusing this topic instead
+// of adding a new one means every consumer that already subscribes to it
+// sees standby without any broker permission changes.
 const char* currentStatus()
 {
     return standby ? "standby" : "online";
@@ -48,7 +50,7 @@ const char* currentStatus()
 
 void publishStatus()
 {
-    mqtt.publish(TOPIC_STATUS, currentStatus(), true);
+    mqtt.publish(TOPIC_STATUS.c_str(), currentStatus(), true);
 }
 
 //==========================================================
@@ -74,7 +76,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // POWER LIMIT
     //======================================================
 
-    if (String(topic) == TOPIC_LIMIT)
+    if (TOPIC_LIMIT == topic)
     {
         float value = message.toFloat();
 
@@ -95,7 +97,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // RESTART ESP32
     //======================================================
 
-    else if (String(topic) == TOPIC_RESTART)
+    else if (TOPIC_RESTART == topic)
     {
         Serial.println("===== MQTT RESTART =====");
 
@@ -108,7 +110,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // FACTORY RESET
     //======================================================
 
-    else if (String(topic) == TOPIC_RESET)
+    else if (TOPIC_RESET == topic)
     {
         Serial.println("===== MQTT FACTORY RESET =====");
 
@@ -123,7 +125,7 @@ void callback(char* topic, byte* payload, unsigned int length)
     // STANDBY / ON
     //======================================================
 
-    else if (String(topic) == TOPIC_POWER)
+    else if (TOPIC_POWER == topic)
     {
         if (message == "off")
         {
@@ -162,6 +164,15 @@ void mqttBegin()
         return;
     }
 
+    TOPIC_DATA    = deviceTopic("data");
+    TOPIC_STATUS  = deviceTopic("status");
+    TOPIC_LIMIT   = deviceTopic("cmd/limit");
+    TOPIC_RESTART = deviceTopic("cmd/restart");
+    TOPIC_RESET   = deviceTopic("cmd/reset");
+    TOPIC_POWER   = deviceTopic("cmd/power");
+
+    Serial.printf("ID perangkat : %s\n", deviceId());
+
     if (MQTT_TLS_INSECURE)
         espClient.setInsecure();
     else
@@ -196,14 +207,16 @@ void mqttReconnect()
     // Last Will: if the device drops off ungracefully (power loss, WiFi
     // loss), the broker publishes "offline" on our behalf so consumers can
     // tell stale retained data from a genuinely live device.
-    if (mqtt.connect("ESP32SmartMeter", MQTT_USERNAME, MQTT_PASSWORD,
-                      TOPIC_STATUS, 1, true, "offline"))
+    // The client ID doubles as the broker's ACL key: one rule on
+    // smartmeter/${clientid}/# covers every unit sharing these credentials.
+    if (mqtt.connect(deviceId(), MQTT_USERNAME, MQTT_PASSWORD,
+                      TOPIC_STATUS.c_str(), 1, true, "offline"))
     {
         publishStatus();
-        mqtt.subscribe(TOPIC_LIMIT);
-        mqtt.subscribe(TOPIC_RESTART);
-        mqtt.subscribe(TOPIC_RESET);
-        mqtt.subscribe(TOPIC_POWER);
+        mqtt.subscribe(TOPIC_LIMIT.c_str());
+        mqtt.subscribe(TOPIC_RESTART.c_str());
+        mqtt.subscribe(TOPIC_RESET.c_str());
+        mqtt.subscribe(TOPIC_POWER.c_str());
     }
 }
 
@@ -280,7 +293,7 @@ void mqttPublish()
     Serial.print("Publish : ");
     Serial.println(json);
 
-    if (mqtt.publish(TOPIC_DATA, json.c_str(), true))
+    if (mqtt.publish(TOPIC_DATA.c_str(), json.c_str(), true))
     {
         Serial.println("PUBLISH SUCCESS");
     }

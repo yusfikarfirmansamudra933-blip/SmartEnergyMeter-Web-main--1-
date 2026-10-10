@@ -5,12 +5,11 @@ const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const MQTT_USERNAME = "smartenergymeterweb";
 const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
 // Billing history is computed server-side (api/monitor.js, run by an
-// external cron) and shared via these retained topics — every browser
-// reads the SAME data, instead of each one tracking its own copy in
-// localStorage (which meant your bill history didn't follow you between
-// devices).
-const TOPIC_BILLING_DAILY = "smartmeter/billing/daily";
-const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
+// external cron) and shared via these retained topics, one set per meter
+// (DEVICE_ID from device.js) — every browser reads the SAME data, instead
+// of each one tracking its own copy in localStorage.
+const TOPIC_BILLING_DAILY = deviceTopic("billing/daily");
+const TOPIC_BILLING_WEEKLY = deviceTopic("billing/weekly");
 
 const $ = (id) => document.getElementById(id);
 const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -400,5 +399,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("downloadPdfBtn").addEventListener("click", downloadMonthPdf);
   renderMonthTabs();
   renderAll();
-  connectMQTT();
+  // Tanpa perangkat tidak ada yang bisa di-subscribe; device.js sedang menampilkan pemilihnya.
+  if (DEVICE_ID) connectMQTT();
+  else setBrokerState("Pilih perangkat dulu", false);
 });

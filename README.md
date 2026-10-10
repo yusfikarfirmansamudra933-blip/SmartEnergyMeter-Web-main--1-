@@ -45,8 +45,8 @@ Firmware ESP32 untuk memantau pemakaian listrik lewat sensor PZEM-004T (plus suh
 
 Device tidak perlu tahu WiFi rumah Anda sebelum di-flash. Kalau belum ada WiFi yang tersimpan (device baru, atau `WIFI_SSID` dikosongkan di `config.local.h`), begitu dinyalakan device otomatis membuka mode setup:
 
-1. OLED menampilkan nama WiFi setup (`SmartMeter-Setup`) dan **PIN 8 digit acak** — PIN ini dibuat baru setiap kali masuk mode setup dan cuma tampil di layar device, jadi cuma orang yang benar-benar berdiri di depan alatnya yang bisa lihat dan menyambung. Device butuh beberapa detik memindai WiFi sekitar dulu sebelum `SmartMeter-Setup` benar-benar bisa disambung — kalau belum kelihatan di daftar WiFi HP, tunggu sebentar lalu refresh.
-2. Dari HP/laptop, sambungkan ke WiFi bernama **`SmartMeter-Setup`**, masukkan PIN yang tampil di OLED sebagai password-nya.
+1. OLED menampilkan nama WiFi setup (`SmartMeter-xxxxxx`, enam karakter terakhirnya sama dengan ID alat, jadi beberapa alat yang sedang setup bersamaan tetap bisa dibedakan) dan **PIN 8 digit acak**. PIN ini dibuat baru setiap kali masuk mode setup dan cuma tampil di layar device, jadi cuma orang yang benar-benar berdiri di depan alatnya yang bisa lihat dan menyambung. Device butuh beberapa detik memindai WiFi sekitar dulu sebelum jaringan setup benar-benar bisa disambung. Kalau belum kelihatan di daftar WiFi HP, tunggu sebentar lalu refresh.
+2. Dari HP/laptop, sambungkan ke WiFi yang namanya tampil di OLED, masukkan PIN yang tampil di OLED sebagai password-nya.
 3. Browser biasanya otomatis membuka halaman setup sendiri (seperti WiFi kafe/hotel). Kalau tidak, buka `http://192.168.4.1` manual.
 4. Pilih nama WiFi rumah Anda dari daftar (device sudah scan duluan sebelum halaman ini kebuka), isi passwordnya, klik **Sambungkan**.
 5. Kalau berhasil, device restart otomatis dan langsung tersambung ke WiFi itu setiap kali nyala berikutnya — tidak perlu setup ulang.
@@ -81,36 +81,40 @@ Pengecekan ini cuma jalan sekali per OTA (bukan tiap boot), jadi tidak menambah 
 
 ## Menyiapkan broker MQTT (EMQX Cloud)
 
-Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www.emqx.com/en/cloud) (tier Serverless gratis). Buat 3 user Authentication dengan Authorization (ACL) berbeda hak akses:
+Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www.emqx.com/en/cloud) (tier Serverless gratis). Buat 3 user Authentication dengan Authorization (ACL) berbeda hak akses. **Semua alat memakai satu user firmware yang sama**, jadi menambah alat ke-2, ke-10, atau ke-100 tidak perlu mengubah EMQX sama sekali:
 
 | User | Dipakai oleh | Hak akses |
 |---|---|---|
-| (kredensial firmware, di `config.local.h`) | ESP32 | Full — publish semua topic, subscribe `cmd/*` |
-| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`) — kode ini publik/terlihat siapa saja | Subscribe `smartmeter/data`, `smartmeter/status` saja. **Publish harus di-deny** (topic `#`) |
-| `smartenergymeterbot` | Bot Telegram, `api/monitor.js`, `api/power.js` (`web-remote/api/*.js`) — server-side, tidak publik | Subscribe `smartmeter/data`, `smartmeter/status`, `smartmeter/telegram/#`, `smartmeter/billing/#`. Publish `smartmeter/cmd/limit`, `smartmeter/cmd/power`, `smartmeter/telegram/#`, `smartmeter/billing/#` |
+| `smartenergymeter` (kredensial firmware, di `config.local.h`) | Semua ESP32 | Publish & Subscribe `smartmeter/${clientid}/#`. `${clientid}` diganti EMQX dengan client ID alat yang sedang terhubung (= ID alat, mis. `sem-a1b2c3`), jadi tiap alat hanya bisa menyentuh topiknya sendiri |
+| `smartenergymeterweb` | Dashboard cloud (`web-remote/script.js`, `bill.html`). Kode ini publik/terlihat siapa saja | Subscribe `smartmeter/+/data`, `smartmeter/+/status`, `smartmeter/+/history`, `smartmeter/+/billing/#` saja. **Publish harus di-deny** (topic `#`) |
+| `smartenergymeterbot` | Bot Telegram, `api/monitor.js`, `api/power.js` (`web-remote/api/*.js`). Server-side, tidak publik | Publish & Subscribe `smartmeter/#` (membaca semua alat, mengirim perintah, menyimpan tagihan & status Telegram) |
 
 **Penting:** begitu ada rule Authorization untuk sebuah username, EMQX Cloud tidak lagi otomatis "allow" untuk action yang tidak match rule apa pun (berbeda dari default global). Jadi setiap hak yang dibutuhkan harus dibuat sebagai rule eksplisit, termasuk Subscribe.
 
 ### Topic MQTT
 
+Setiap alat punya ID sendiri: `sem-` + 6 karakter terakhir MAC chip-nya (mis. `sem-a1b2c3`). ID ini dibuat otomatis oleh firmware, jadi satu `firmware.bin` yang sama bisa di-flash ke semua alat. ID tampil di OLED (halaman yang judulnya `ID sem-...`), di Serial Monitor saat boot, dan di `/api/status` dashboard lokal. Semua topik alat ada di bawah `smartmeter/<id>/`:
+
 | Topic | Arah | Isi |
 |---|---|---|
-| `smartmeter/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32 — tidak dikirim kalau belum ada pembacaan valid, dll), **retained** |
-| `smartmeter/status` | ESP32/broker → subscriber | `"online"` / `"standby"` / `"offline"`. `"standby"` = pemantauan dijeda dari dashboard (ESP32 tetap terhubung). `"offline"` di-set via MQTT Last Will, jadi otomatis muncul kalau ESP32 putus koneksi tanpa sempat pamit |
-| `smartmeter/history` | ESP32 → dashboard | JSON rata-rata per menit untuk 60 menit terakhir: `{ "interval": 60, "end": <epoch UTC, 0 kalau jam belum sinkron>, "power": [...], "voltage": [...], "current": [...], "frequency": [...], "pf": [...], "chipTemperature": [...] }`, urut dari yang terlama, `null` untuk menit tanpa data (standby/sensor mati). Dikirim tiap menit, **retained**. User `smartenergymeterweb` butuh izin Subscribe topik ini |
-| `smartmeter/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
-| `smartmeter/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED menampilkan STANDBY, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
-| `smartmeter/telegram/control_lockout` | `api/power.js` internal | Penghitung PIN salah untuk kartu Pemantauan (5 kali salah = terkunci 15 menit), retained |
-| `smartmeter/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
-| `smartmeter/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
-| `smartmeter/telegram/chatid` | bot → tersimpan di broker | Chat ID Telegram terdaftar, retained |
-| `smartmeter/telegram/alert_state` | bot → tersimpan di broker | State notifikasi (sudah/belum alert offline/overload), retained |
-| `smartmeter/telegram/summary_state` | `api/monitor.js` → tersimpan di broker | Tanggal terakhir ringkasan harian/mingguan terkirim (dedup), retained |
-| `smartmeter/telegram/reminder` | bot (`/reminder`) → tersimpan di broker | JSON `{ "day": 25, "message": "..." }` pengingat bayar listrik custom, retained |
-| `smartmeter/telegram/reminder_state` | `api/monitor.js` → tersimpan di broker | Bulan terakhir pengingat custom terkirim (dedup), retained |
-| `smartmeter/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, histori harian bersama semua device, retained |
-| `smartmeter/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
-| `smartmeter/billing/daily_start`, `smartmeter/billing/weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu, dipakai hitung delta pemakaian, retained |
+| `smartmeter/<id>/data` | ESP32 → subscriber | JSON telemetri (voltage, current, power, energy, chipTemperature = suhu chip ESP32, tidak dikirim kalau belum ada pembacaan valid, dll), **retained** |
+| `smartmeter/<id>/status` | ESP32/broker → subscriber | `"online"` / `"standby"` / `"offline"`. `"standby"` = pemantauan dijeda dari dashboard (ESP32 tetap terhubung). `"offline"` di-set via MQTT Last Will, jadi otomatis muncul kalau ESP32 putus koneksi tanpa sempat pamit. `api/monitor.js` menemukan alat baru dari topik ini |
+| `smartmeter/<id>/history` | ESP32 → dashboard | JSON rata-rata per menit untuk 60 menit terakhir: `{ "interval": 60, "end": <epoch UTC, 0 kalau jam belum sinkron>, "power": [...], "voltage": [...], "current": [...], "frequency": [...], "pf": [...], "chipTemperature": [...] }`, urut dari yang terlama, `null` untuk menit tanpa data (standby/sensor mati). Dikirim tiap menit, **retained** |
+| `smartmeter/<id>/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
+| `smartmeter/<id>/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED menampilkan STANDBY, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
+| `smartmeter/<id>/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
+| `smartmeter/<id>/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
+| `smartmeter/<id>/control/lockout` | `api/power.js`, bot | Penghitung PIN salah alat ini (5 kali salah = terkunci 15 menit), retained |
+| `smartmeter/<id>/telegram/alert_state` | `api/monitor.js` | State notifikasi (sudah/belum alert offline/overload/standby), retained |
+| `smartmeter/<id>/telegram/summary_state` | `api/monitor.js` | Tanggal terakhir ringkasan harian/mingguan terkirim (dedup), retained |
+| `smartmeter/<id>/telegram/reminder` | bot (`/reminder`) | JSON `{ "day": 25, "message": "..." }` pengingat bayar listrik custom, retained |
+| `smartmeter/<id>/telegram/reminder_state` | `api/monitor.js` | Bulan terakhir pengingat custom terkirim (dedup), retained |
+| `smartmeter/<id>/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, retained |
+| `smartmeter/<id>/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
+| `smartmeter/<id>/billing/daily_start`, `.../weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu, dipakai hitung delta pemakaian, retained |
+| `smartmeter/_bot/chat/<chatId>` | bot | JSON `{ "active": "sem-a1b2c3", "devices": [...] }`: alat yang terhubung ke chat Telegram itu, retained |
+
+**Pindah dari firmware lama (sebelum 1.15.0):** dulu topiknya `smartmeter/data`, `smartmeter/billing/daily`, dst tanpa ID. Begitu alat pertama muncul dengan firmware baru, `api/monitor.js` otomatis memindahkan histori tagihan, pengingat, dan chat Telegram lama ke alat itu, lalu menghapus topik lama. Ini hanya jalan kalau baru ada **satu** alat di broker, supaya histori tidak salah masuk ke alat lain.
 
 ## Menyiapkan dashboard cloud & bot Telegram (`web-remote/`)
 
@@ -120,12 +124,38 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
    - `MQTT_USERNAME`, `MQTT_PASSWORD` — kredensial `smartenergymeterweb` (dipakai script.js sisi client, jadi memang publik — makanya harus read-only)
    - `BOT_MQTT_USERNAME`, `BOT_MQTT_PASSWORD` — kredensial `smartenergymeterbot`
    - `TELEGRAM_BOT_TOKEN` — token dari [@BotFather](https://t.me/BotFather)
-   - `CONTROL_PIN` — PIN untuk tombol "Matikan/Nyalakan pemantauan" di dashboard cloud (disarankan minimal 6 angka). Tanpa variabel ini, `api/power.js` menolak semua perintah
+   - `CONTROL_SECRET`: kunci rahasia untuk membuat PIN tiap alat (lihat "Menambah alat baru" di bawah). Tanpa variabel ini, tombol Pemantauan di dashboard dan `/hubungkan` di bot menolak semua permintaan
 4. Daftarkan webhook bot: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain-vercel>/api/telegram"`
 5. Daftarkan daftar command bot (untuk autocomplete `/` di Telegram) lewat `setMyCommands` — lihat daftar command di bawah.
 6. `GET /api/monitor` harus dipanggil secara berkala — endpoint ini bukan cuma untuk notifikasi (offline/overload), tapi juga **satu-satunya tempat** yang menghitung & menyimpan histori tagihan harian/mingguan (`smartmeter/billing/*`), mengirim ringkasan Telegram (21:00 WIB harian, Minggu 21:00 WIB mingguan), dan mengecek pengingat bayar listrik custom (`/reminder`, jam 08:00 WIB). Kalau endpoint ini tidak pernah dipanggil, histori tagihan tidak akan pernah ter-update dan pengingat custom tidak akan pernah terkirim. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.
 
+### Menambah alat baru
+
+Tidak ada yang perlu diatur di EMQX, Vercel, atau kode:
+
+1. Flash `firmware.bin` yang sama (lewat USB untuk alat baru, atau OTA).
+2. Nyalakan alat, setup WiFi-nya (lihat "Setup WiFi pertama kali"). Catat ID yang tampil di OLED.
+3. Buat label berisi ID, PIN, dan QR code. Sekali saja di awal, buat kuncinya lalu masukkan isinya ke Vercel sebagai `CONTROL_SECRET`:
+
+   ```sh
+   cd web-remote
+   node scripts/device-label.js --new-secret
+   ```
+
+   Setelah itu, setiap ada alat baru:
+
+   ```sh
+   node scripts/device-label.js --bot <username_bot_telegram> sem-a1b2c3 sem-d4e5f6
+   ```
+
+   Hasilnya `web-remote/labels.local.html`: buka, cetak, tempel di tiap alat. PIN tiap alat dihitung dari ID-nya plus `CONTROL_SECRET`, jadi tidak disimpan di mana pun dan tidak perlu didaftarkan. Kalau secret diganti, semua PIN lama ikut tidak berlaku. File secret dan label tidak ikut di-commit maupun di-deploy (`.gitignore`, `.vercelignore`).
+4. Pemilik alat memindai QR **Dashboard** (membuka `/?device=<id>`) dan QR **Telegram** (membuka bot dan langsung menautkan alat lewat `/start <id>_<pin>`).
+
+Di dashboard cloud, tombol **Ganti** di baris "Perangkat" membuka daftar alat yang pernah dibuka di browser itu dan kolom untuk mengetik ID lain.
+
 ### Command bot Telegram
+
+**Menautkan alat:** `/hubungkan <ID> <PIN>` (atau pindai QR Telegram di label). Satu chat boleh terhubung ke beberapa alat. Perintah data selalu ke **alat aktif**: `/perangkat` untuk melihat dan mengganti alat aktif, `/lepas` untuk melepas alat aktif. Notifikasi otomatis dikirim ke semua chat yang terhubung ke alatnya, diawali ID alat kalau chat itu terhubung ke lebih dari satu alat. Chat yang belum menautkan alat hanya mendapat petunjuk cara menautkan.
 
 **Menu tombol:** kirim `/start`, `/help`, atau `/menu` — bot membalas dengan tombol yang bisa langsung ditekan (Daya, Energi, Tegangan, Arus, Suhu, Power Factor, Status Lengkap, Batas Daya, Riwayat, Pengingat), jadi tidak perlu hafal nama command. Setiap kali tombol ditekan, menu ikut terkirim lagi bersama jawabannya supaya bisa lanjut menekan tombol berikutnya. Command ketik tetap jalan seperti biasa.
 
@@ -135,7 +165,9 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
 
 - Kredensial WiFi/MQTT firmware **hanya** di `include/config.local.h`, tidak pernah di-commit (lihat `.gitignore`).
 - Kredensial MQTT di dashboard cloud (`smartenergymeterweb`) **sengaja read-only** karena kodenya publik dan terlihat siapa saja lewat "View Source" — jangan pernah pakai kredensial full-access di sana.
-- Kredensial bot (`smartenergymeterbot`, `TELEGRAM_BOT_TOKEN`) hanya hidup sebagai environment variable server-side di Vercel, tidak pernah masuk ke kode yang di-deploy ke browser.
+- Kredensial bot (`smartenergymeterbot`, `TELEGRAM_BOT_TOKEN`, `CONTROL_SECRET`) hanya hidup sebagai environment variable server-side di Vercel, tidak pernah masuk ke kode yang di-deploy ke browser.
+- **Vercel CLI tidak membaca `.gitignore`.** File apa pun di `web-remote/` yang tidak tercantum di `web-remote/.vercelignore` ikut ter-upload dan bisa diunduh publik. Simpan catatan kredensial lokal dengan akhiran `.local.txt` (sudah dikecualikan), atau di luar folder `web-remote/`.
+- Semua alat berbagi satu password MQTT firmware. Orang yang membongkar satu alat bisa mengambil password itu lalu menyamar sebagai alat lain (memilih client ID lain). Untuk produk yang dijual luas, beri tiap alat username sendiri (EMQX bisa impor daftar user dari CSV) dan ganti aturan ACL-nya ke `smartmeter/${username}/#`.
 - Dashboard lokal (`data/`) saat ini **belum** punya autentikasi HTTP aktif di sebagian besar endpoint (`/restart`, `/factoryReset`, `/setLimit`) meski field `WEB_USERNAME`/`WEB_PASSWORD` sudah ada di config — siapa pun di jaringan WiFi yang sama bisa akses. Pengecualiannya `/update` (OTA firmware): endpoint ini **menegakkan** HTTP Basic Auth begitu `WEB_USERNAME`/`WEB_PASSWORD` diisi, karena flash firmware sembarangan jauh lebih berbahaya daripada restart/reset.
 
 ## Struktur
@@ -146,3 +178,7 @@ Firmware butuh broker MQTT dengan TLS. Proyek ini pakai [EMQX Cloud](https://www
   - `index.html`, `script.js`, `style.css`, `bill.html` — dashboard & halaman tagihan (MQTT over WebSocket).
   - `api/telegram.js` — webhook bot Telegram.
   - `api/monitor.js` — endpoint pengecekan berkala untuk notifikasi otomatis.
+  - `api/power.js`: tombol Pemantauan (standby) dashboard, dicek dengan PIN alat.
+  - `lib/devices.js`: ID alat, topik, PIN, dan koneksi MQTT bot yang dipakai bersama semua `api/`.
+  - `device.js`: pemilih perangkat di dashboard (ID dari `?device=` atau pilihan terakhir).
+  - `scripts/device-label.js`: pembuat label ID/PIN/QR, dijalankan lokal saja.

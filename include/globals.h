@@ -19,7 +19,7 @@ extern bool overload;
 
 extern bool sensorOnline;
 
-// Remote standby (smartmeter/cmd/power): PZEM is not read, the OLED is
+// Remote standby (smartmeter/<deviceId>/cmd/power): PZEM is not read, the OLED is
 // switched off and no telemetry is published, but WiFi and MQTT stay up so
 // the device can be turned back on from the dashboard. Not persisted, so
 // every boot (including after a power cut) starts in normal mode.

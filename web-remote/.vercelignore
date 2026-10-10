@@ -1,0 +1,6 @@
+# Vercel CLI does not read .gitignore: anything not listed here is uploaded
+# and served publicly as a static file.
+*.local.txt
+*.local.html
+# Run locally only (makes labels from CONTROL_SECRET), no reason to serve it.
+scripts

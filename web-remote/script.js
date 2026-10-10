@@ -7,10 +7,14 @@
 const MQTT_WS_URL = "wss://l660c516.ala.eu-central-1.emqxsl.com:8084/mqtt";
 const MQTT_USERNAME = "smartenergymeterweb";
 const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
-const TOPIC_DATA = "smartmeter/data";
-const TOPIC_STATUS = "smartmeter/status";
-const TOPIC_BILLING_WEEKLY = "smartmeter/billing/weekly";
-const TOPIC_HISTORY = "smartmeter/history";
+// Topik milik alat yang sedang dibuka (DEVICE_ID dari device.js).
+const TOPIC_DATA = deviceTopic("data");
+const TOPIC_STATUS = deviceTopic("status");
+const TOPIC_BILLING_WEEKLY = deviceTopic("billing/weekly");
+const TOPIC_HISTORY = deviceTopic("history");
+// Alat yang pernah tersambung selalu punya status retained, jadi status yang
+// tidak datang sesudah selama ini berarti ID-nya belum pernah online.
+const STATUS_WAIT_MS = 8000;
 
 // Warna berasal dari variabel CSS di index.html, jadi ikut berganti dengan tema.
 const TONE_STROKE = { good: "var(--accent)", warn: "var(--warn)", bad: "var(--bad)" };
@@ -25,6 +29,7 @@ let lastPacketAt = 0;
 let lastIntervalMs = 0;
 let deviceOnline = false;
 let deviceState = null; // "online" | "standby" | "offline", null sampai status pertama tiba
+let statusWaitTimer = null;
 
 function number(value) { const parsed = Number(value); return Number.isFinite(parsed) ? parsed : 0; }
 function setText(id, value) { const el = $(id); if (el) el.textContent = value; }
@@ -54,7 +59,7 @@ function setGaugeTone(id, tone) {
   if (el) el.style.color = TONE_STROKE[tone] || TONE_STROKE.good;
 }
 
-// Broker meretensi pesan smartmeter/data terakhir, jadi angkanya tetap ada
+// Broker meretensi pesan .../data terakhir, jadi angkanya tetap ada
 // walau perangkat sudah mati — kosongkan tampilan saat status bukan "online"
 // supaya tidak terlihat seolah masih data langsung.
 function clearMetricsDisplay() {
@@ -78,23 +83,32 @@ function idleDataText() {
   return "Menunggu data";
 }
 
+// Status yang bukan dari perangkat: belum ada ID, atau ID-nya tidak pernah mengirim status.
+const NO_DEVICE_VIEW = { label: "Pilih perangkat", dot: "var(--warn)", ink: "var(--warn-ink)" };
+const UNKNOWN_DEVICE_VIEW = { label: "Tidak ada data", dot: "var(--warn)", ink: "var(--warn-ink)" };
+
+function setHeaderStatus(view) {
+  const dot = $("headerDot");
+  if (dot) dot.style.background = view.dot;
+  const headerText = $("headerStatusText");
+  if (headerText) { headerText.textContent = view.label; headerText.style.color = view.ink; }
+}
+
 const STATUS_VIEW = {
   online: { label: "Online", dot: "var(--accent)", ink: "var(--accent-ink)" },
   standby: { label: "Standby", dot: "var(--warn)", ink: "var(--warn-ink)" },
   offline: { label: "Offline", dot: "var(--bad)", ink: "var(--bad-ink)" },
 };
 
-// Indikator header dari smartmeter/status: "online", "standby" (pemantauan
+// Indikator header dari .../status: "online", "standby" (pemantauan
 // dijeda dari kartu Pemantauan), atau "offline" (Last Will dari broker). Ini
 // status ESP32 sendiri, bukan koneksi browser ke broker.
 function setDeviceStatus(state) {
+  clearTimeout(statusWaitTimer);
+  setDeviceNote("");
   deviceState = state === "online" || state === "standby" ? state : "offline";
   deviceOnline = deviceState === "online";
-  const view = STATUS_VIEW[deviceState];
-  const dot = $("headerDot");
-  if (dot) dot.style.background = view.dot;
-  const headerText = $("headerStatusText");
-  if (headerText) { headerText.textContent = view.label; headerText.style.color = view.ink; }
+  setHeaderStatus(STATUS_VIEW[deviceState]);
   if (!deviceOnline) clearMetricsDisplay();
   renderPowerCard();
 }
@@ -167,7 +181,7 @@ function closePowerForm() {
 function powerErrorText(status, body) {
   if (status === 401) return `PIN salah. Sisa ${body.attemptsLeft} percobaan.`;
   if (status === 429) return `Terlalu banyak PIN salah. Coba lagi dalam ${Math.max(1, Math.ceil((body.retryAfterSec || 900) / 60))} menit.`;
-  if (status === 503) return "Kontrol belum diaktifkan di server (CONTROL_PIN belum diatur di Vercel).";
+  if (status === 503) return "Kontrol belum diaktifkan di server (CONTROL_SECRET belum diatur di Vercel).";
   return "Gagal mengirim perintah. Periksa koneksi lalu coba lagi.";
 }
 
@@ -184,7 +198,7 @@ async function submitPower(event) {
 
   let status = 0, body = {};
   try {
-    const res = await fetch("api/power", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action, pin }) });
+    const res = await fetch("api/power", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: DEVICE_ID, action, pin }) });
     status = res.status;
     body = await res.json().catch(() => ({}));
   } catch { /* status tetap 0: gagal jaringan */ }
@@ -285,8 +299,8 @@ function updateDashboard() {
 
 function applyStatus(data) {
   Object.assign(meter, data || {});
-  // smartmeter/data is retained, so it can arrive even when the device is
-  // known offline (smartmeter/status) — don't render it as if it were live.
+  // .../data is retained, so it can arrive even when the device is
+  // known offline (.../status) — don't render it as if it were live.
   if (!deviceOnline) return;
   const now = Date.now();
   if (lastPacketAt) lastIntervalMs = now - lastPacketAt;
@@ -306,6 +320,14 @@ function connectMQTT() {
   });
   client.on("connect", () => {
     setBrokerStatus("Terhubung ke broker");
+    if (deviceState === null) {
+      clearTimeout(statusWaitTimer);
+      statusWaitTimer = setTimeout(() => {
+        if (deviceState !== null) return;
+        setHeaderStatus(UNKNOWN_DEVICE_VIEW);
+        setDeviceNote("Belum ada data dari ID ini. Periksa ID di label alat, dan pastikan alatnya menyala dan tersambung ke WiFi.");
+      }, STATUS_WAIT_MS);
+    }
     client.subscribe(TOPIC_STATUS);
     client.subscribe(TOPIC_DATA);
     client.subscribe(TOPIC_BILLING_WEEKLY);
@@ -353,13 +375,15 @@ window.addEventListener("load", () => {
   updateClock();
   setupHistoryChart();
   setupPowerCard();
-  connectMQTT();
   // Belum ada status dari broker: tampilkan sebagai belum diketahui, bukan offline.
   deviceState = null;
   clearMetricsDisplay();
   renderPowerCard();
+  // Tanpa perangkat tidak ada yang bisa di-subscribe; device.js sedang menampilkan pemilihnya.
+  if (DEVICE_ID) connectMQTT();
+  else { setBrokerStatus("Pilih perangkat dulu"); setHeaderStatus(NO_DEVICE_VIEW); historyDisconnected(); }
 
-  $("btn-reconnect")?.addEventListener("click", () => connectMQTT());
+  $("btn-reconnect")?.addEventListener("click", () => { if (DEVICE_ID) connectMQTT(); });
 
   setInterval(updateClock, 1000);
   setInterval(() => {

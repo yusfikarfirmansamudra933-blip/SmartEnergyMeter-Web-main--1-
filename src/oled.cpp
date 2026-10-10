@@ -6,6 +6,7 @@
 
 #include "billing.h"
 #include "config.h"
+#include "deviceId.h"
 #include "globals.h"
 #include "wifiManager.h"
 
@@ -179,7 +180,9 @@ display.print(powerLimit);
 void page4()
 {
 
-drawHeader("System");
+// Device ID on the header: it is what the cloud dashboard and the Telegram
+// bot ask for, so the owner can read it straight off the unit.
+drawHeader(String("ID ")+deviceId());
 
 display.setCursor(0,12);
 
@@ -366,14 +369,14 @@ display.display();
 
 }
 
-void oledShowProvisioning(const char *apPassword)
+void oledShowProvisioning(const char *ssid, const char *apPassword)
 {
 
 display.clearDisplay();
 
 display.setTextSize(1);
 
-drawHeader("SmartMeter-Setup");
+drawHeader(ssid);
 
 display.setCursor(0,12);
 
