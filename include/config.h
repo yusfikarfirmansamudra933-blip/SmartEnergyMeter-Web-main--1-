@@ -45,8 +45,6 @@
 
 #define OLED_INTERVAL 15000
 
-#define GRAPH_INTERVAL 1000
-
 /*==============================
         LIMIT
 ==============================*/

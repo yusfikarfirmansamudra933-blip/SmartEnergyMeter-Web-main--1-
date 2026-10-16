@@ -26,11 +26,6 @@ void loadConfig()
     Serial.println(powerLimit);
 }
 
-void saveConfig()
-{
-    preferences.putFloat("limit", powerLimit);
-}
-
 void saveLimit(float value)
 {
     powerLimit = value;

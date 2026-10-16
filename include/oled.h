@@ -5,8 +5,6 @@
 
 void oledBegin();
 
-void oledSplash();
-
 void oledLoop();
 
 // Takes over the OLED to show OTA upload progress (0-100). Call repeatedly

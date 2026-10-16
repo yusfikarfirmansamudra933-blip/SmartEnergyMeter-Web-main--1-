@@ -228,8 +228,6 @@ void loop()
     wifiLoop();
     mqttLoop();
 
-    
-
     webServerLoop();
 
     oledLoop();

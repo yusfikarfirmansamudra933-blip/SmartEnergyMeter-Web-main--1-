@@ -31,18 +31,7 @@ extern bool standby;
 extern float chipTemperature;
 extern bool chipTempValid;
 
-extern uint32_t pzemReadCount;
-
-extern uint32_t pzemErrorCount;
-
-extern uint8_t signalQuality;
-
 extern unsigned long sensorTimer;
 
 extern unsigned long chipTempTimer;
-
-extern unsigned long oledTimer;
-
-extern int powerPercent;
-extern uint32_t overloadCount;
 #endif

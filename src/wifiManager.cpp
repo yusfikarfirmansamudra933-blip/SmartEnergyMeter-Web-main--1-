@@ -85,13 +85,3 @@ String getIPAddress()
 {
     return WiFi.localIP().toString();
 }
-
-int wifiRSSI()
-{
-    return WiFi.RSSI();
-}
-
-String wifiSSID()
-{
-    return WiFi.SSID();
-}

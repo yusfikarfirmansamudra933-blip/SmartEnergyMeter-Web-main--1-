@@ -19,15 +19,5 @@ bool standby = false;
 float chipTemperature = 0;
 bool chipTempValid = false;
 
-uint32_t pzemReadCount = 0;
-uint32_t pzemErrorCount = 0;
-
-uint8_t signalQuality = 100;
-
 unsigned long sensorTimer = 0;
 unsigned long chipTempTimer = 0;
-unsigned long oledTimer = 0;
-
-int powerPercent = 0;
-
-uint32_t overloadCount = 0;

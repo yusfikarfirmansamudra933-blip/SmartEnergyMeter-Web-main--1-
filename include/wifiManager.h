@@ -11,8 +11,4 @@ bool wifiConnected();
 
 String getIPAddress();
 
-int wifiRSSI();
-
-String wifiSSID();
-
 #endif

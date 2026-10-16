@@ -47,7 +47,6 @@ void readPZEM()
 
     if (isnan(v) || isnan(i) || isnan(p) || isnan(e) || isnan(f) || isnan(pfValue))
     {
-        pzemErrorCount++;
         if (consecutiveFailures < 255)
         {
             consecutiveFailures++;
@@ -61,7 +60,6 @@ void readPZEM()
 
     consecutiveFailures = 0;
     sensorOnline = true;
-    pzemReadCount++;
 
     voltage = v;
     current = i;

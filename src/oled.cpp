@@ -10,9 +10,6 @@
 #include "globals.h"
 #include "wifiManager.h"
 
-#define SCREEN_WIDTH 128
-#define SCREEN_HEIGHT 32
-
 Adafruit_SSD1306 display(
 SCREEN_WIDTH,
 SCREEN_HEIGHT,
@@ -85,34 +82,11 @@ void oledBegin()
 
 display.begin(
 SSD1306_SWITCHCAPVCC,
-0x3C);
+OLED_ADDRESS);
 
 display.clearDisplay();
 
 display.display();
-
-}
-
-void oledSplash()
-{
-
-display.clearDisplay();
-
-display.setTextSize(2);
-
-display.setCursor(8,2);
-
-display.println("SMART");
-
-display.setCursor(18,18);
-
-display.println("METER");
-
-display.display();
-
-delay(2000);
-
-display.setTextSize(1);
 
 }
 
@@ -158,8 +132,6 @@ void page3()
 {
 
 drawHeader("Protection");
-
-display.setCursor(0,12);
 
 display.setCursor(70,12);
 
