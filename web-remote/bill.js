@@ -10,6 +10,12 @@ const MQTT_PASSWORD = "sMch!JtGn5gpYD4";
 // of each one tracking its own copy in localStorage.
 const TOPIC_BILLING_DAILY = deviceTopic("billing/daily");
 const TOPIC_BILLING_WEEKLY = deviceTopic("billing/weekly");
+// kWh per hari/minggu, ditulis api/monitor.js bersama rupiahnya. Data sebelum
+// fitur tarif tidak punya ini, jadi kWh-nya dihitung balik dari rupiah.
+const TOPIC_BILLING_DAILY_KWH = deviceTopic("billing/daily_kwh");
+const TOPIC_BILLING_WEEKLY_KWH = deviceTopic("billing/weekly_kwh");
+// Golongan tarif alat ini ({"code","rate"}), diatur lewat kartu Golongan tarif atau bot /tarif.
+const TOPIC_TARIFF = deviceTopic("billing/tariff");
 
 const $ = (id) => document.getElementById(id);
 const monthNames = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
@@ -17,6 +23,11 @@ const monthShort = ["Jan", "Feb", "Mar", "Apr", "Mei", "Jun", "Jul", "Agu", "Sep
 
 let weeklyData = {};
 let dailyData = {};
+let weeklyKwhData = {};
+let dailyKwhData = {};
+let tariff = Tariffs.DEFAULT;
+let tariffKnown = false; // false sampai pesan retained tarif (atau ketiadaannya) diketahui
+let tariffSet = false;   // true kalau alat ini punya golongan tersimpan, bukan default
 let selectedMonth = new Date().getMonth();
 const selectedYear = new Date().getFullYear();
 
@@ -24,9 +35,24 @@ function formatRupiah(value) {
   return new Intl.NumberFormat("id-ID", { style: "currency", currency: "IDR", maximumFractionDigits: 0 }).format(Number(value) || 0);
 }
 
-// Must match ELECTRICITY_RATE in api/monitor.js — there's no per-user rate
-// setting (no UI for it), this is just the single source of truth.
-function getElectricityRate() { return 1444.7; }
+function getElectricityRate() { return tariff.rate; }
+
+// kWh tersimpan kalau ada, kalau tidak dihitung balik dari rupiah dengan tarif sekarang.
+function kwhOr(stored, rp) {
+  return Number.isFinite(Number(stored)) ? Number(stored) : rp / getElectricityRate();
+}
+function dayKwh(date) {
+  return kwhOr(dailyKwhData[dayKey(date)], Number(dailyData[dayKey(date)] || 0));
+}
+function weekKwh(year, monthIndex, w) {
+  const kwh = (weeklyKwhData[monthKey(year, monthIndex)] || {})["week" + w];
+  return kwhOr(kwh, getWeeklyBills(year, monthIndex)[w - 1]);
+}
+function monthKwh(year, monthIndex) {
+  let total = 0;
+  for (let w = 1; w <= 5; w++) total += weekKwh(year, monthIndex, w);
+  return total;
+}
 
 function monthKey(year, monthIndex) { return `${year}-${String(monthIndex + 1).padStart(2, "0")}`; }
 function dayKey(date) { return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`; }
@@ -57,7 +83,7 @@ function renderHero() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const total = getMonthTotal(year, month);
   const rate = getElectricityRate();
-  const kwh = rate > 0 ? total / rate : 0;
+  const kwh = monthKwh(year, month);
 
   $("heroMonthLabel").textContent = `${monthNames[month]} ${year}`;
   $("heroTotal").textContent = formatRupiah(total);
@@ -207,12 +233,11 @@ function renderWeekCards() {
   const currentWeek = isCurrentMonth ? Math.min(Math.floor((now.getDate() - 1) / 7) + 1, 5) : -1;
   const lastDayOfMonth = new Date(selectedYear, selectedMonth + 1, 0).getDate();
   const bills = getWeeklyBills(selectedYear, selectedMonth);
-  const rate = getElectricityRate();
 
   let hasAny = false;
   for (let w = 0; 1 + w * 7 <= lastDayOfMonth && w < 5; w++) {
     const bill = bills[w];
-    const kwh = rate > 0 ? bill / rate : 0;
+    const kwh = weekKwh(selectedYear, selectedMonth, w + 1);
     const start = new Date(selectedYear, selectedMonth, 1 + w * 7);
     const end = new Date(selectedYear, selectedMonth, Math.min(1 + w * 7 + 6, lastDayOfMonth));
     const status = weekStatusLabel(bill, bills, currentWeek === w + 1);
@@ -247,7 +272,6 @@ function renderWeekCards() {
 function downloadMonthExcel() {
   if (typeof XLSX === "undefined") return;
   const year = selectedYear, monthIndex = selectedMonth;
-  const rate = getElectricityRate();
   const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
 
   const rows = [["Minggu", "Rincian", "Hari 1", "Hari 2", "Hari 3", "Hari 4", "Hari 5", "Hari 6", "Hari 7", "Total"]];
@@ -265,18 +289,20 @@ function downloadMonthExcel() {
     const kwhRow = [weekLabel, "Pemakaian (kWh)"];
     const rpRow = ["", "Tagihan (Rp)"];
     let weekTotal = 0;
+    let weekKwhTotal = 0;
 
     for (let day = weekStartDay; day <= weekStartDay + 6; day++) {
       if (day > weekEndDay) { kwhRow.push(""); rpRow.push(""); continue; }
       const date = new Date(year, monthIndex, day);
       const dayBill = Number(dailyData[dayKey(date)] || 0);
-      const dayKwh = rate > 0 ? dayBill / rate : 0;
-      kwhRow.push(Number(dayKwh.toFixed(3)));
+      const kwh = dayKwh(date);
+      kwhRow.push(Number(kwh.toFixed(3)));
+      weekKwhTotal += kwh;
       rpRow.push(Math.round(dayBill));
       weekTotal += dayBill;
     }
 
-    kwhRow.push(rate > 0 ? Number((weekTotal / rate).toFixed(3)) : 0);
+    kwhRow.push(Number(weekKwhTotal.toFixed(3)));
     rpRow.push(Math.round(weekTotal));
     rows.push(kwhRow, rpRow);
     merges.push({ s: { r: rowIndex, c: 0 }, e: { r: rowIndex + 1, c: 0 } });
@@ -298,7 +324,6 @@ function downloadMonthExcel() {
 function downloadMonthPdf() {
   if (typeof window.jspdf === "undefined") return;
   const year = selectedYear, monthIndex = selectedMonth;
-  const rate = getElectricityRate();
   const lastDayOfMonth = new Date(year, monthIndex + 1, 0).getDate();
 
   const { jsPDF } = window.jspdf;
@@ -320,18 +345,20 @@ function downloadMonthPdf() {
     const kwhRow = [weekLabel, "Pemakaian (kWh)"];
     const rpRow = [weekLabel, "Tagihan (Rp)"];
     let weekTotal = 0;
+    let weekKwhTotal = 0;
 
     for (let day = weekStartDay; day <= weekStartDay + 6; day++) {
       if (day > weekEndDay) { kwhRow.push(""); rpRow.push(""); continue; }
       const date = new Date(year, monthIndex, day);
       const dayBill = Number(dailyData[dayKey(date)] || 0);
-      const dayKwh = rate > 0 ? dayBill / rate : 0;
-      kwhRow.push(dayKwh.toFixed(3));
+      const kwh = dayKwh(date);
+      kwhRow.push(kwh.toFixed(3));
+      weekKwhTotal += kwh;
       rpRow.push(formatRupiah(dayBill));
       weekTotal += dayBill;
     }
 
-    kwhRow.push(rate > 0 ? (weekTotal / rate).toFixed(3) : "0");
+    kwhRow.push(weekKwhTotal.toFixed(3));
     rpRow.push(formatRupiah(weekTotal));
     body.push(kwhRow, rpRow);
     grandTotal += weekTotal;
@@ -346,6 +373,135 @@ function downloadMonthPdf() {
     columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 30 } },
   });
   doc.save(`Tagihan-${monthNames[monthIndex]}-${year}.pdf`);
+}
+
+// --- Kartu golongan tarif ---
+
+const TARIFF_TIMEOUT_MS = 15000;
+const tariffUi = { formOpen: false, sending: false, pending: null, pendingTimer: null };
+
+function rupiahPerKwh(rate) {
+  return `Rp ${rate.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kWh`;
+}
+
+function setTariffMessage(text, tone) {
+  const el = $("tariff-msg");
+  el.hidden = !text;
+  el.textContent = text || "";
+  el.className = `text-small ${tone === "bad" ? "text-bad-ink" : tone === "good" ? "text-accent-ink" : "text-ink-2"}`;
+}
+
+function renderTariffCard() {
+  $("h-tarif").textContent = tariffKnown ? tariff.label : "-";
+  $("tariff-rate").textContent = tariffKnown ? rupiahPerKwh(tariff.rate) : "-";
+  $("tariff-note").textContent = !DEVICE_ID ? "Pilih perangkat dulu."
+    : !tariffKnown ? "Memeriksa golongan alat ini..."
+    : tariffSet ? "Dipakai untuk menghitung tagihan alat ini, di dashboard dan di layar OLED."
+    : "Belum diatur untuk alat ini, jadi memakai tarif awal. Ubah kalau golongan rumah Anda berbeda.";
+  const busy = !!tariffUi.pending;
+  $("btn-tariff").hidden = !DEVICE_ID || !tariffKnown || tariffUi.formOpen || busy;
+  $("tariff-form").hidden = !tariffUi.formOpen;
+  $("tariff-submit").disabled = tariffUi.sending;
+  $("tariff-submit").textContent = tariffUi.sending ? "Menyimpan..." : "Simpan";
+}
+
+function openTariffForm() {
+  const select = $("tariff-select");
+  select.innerHTML = "";
+  Tariffs.LIST.forEach((t) => {
+    const opt = document.createElement("option");
+    opt.value = t.code;
+    opt.textContent = `${t.label}, ${rupiahPerKwh(t.rate)}`;
+    opt.selected = t.code === tariff.code;
+    select.appendChild(opt);
+  });
+  tariffUi.formOpen = true;
+  setTariffMessage("");
+  $("tariff-pin-error").hidden = true;
+  renderTariffCard();
+  select.focus();
+}
+
+function closeTariffForm() {
+  tariffUi.formOpen = false;
+  $("tariff-pin").value = "";
+  $("tariff-pin-error").hidden = true;
+  renderTariffCard();
+  $("btn-tariff").focus();
+}
+
+function tariffErrorText(status, body) {
+  if (status === 401) return `PIN salah. Sisa ${body.attemptsLeft} percobaan.`;
+  if (status === 429) return `Terlalu banyak PIN salah. Coba lagi dalam ${Math.max(1, Math.ceil((body.retryAfterSec || 900) / 60))} menit.`;
+  if (status === 503) return "Kontrol belum diaktifkan di server (CONTROL_SECRET belum diatur di Vercel).";
+  return "Gagal menyimpan. Periksa koneksi lalu coba lagi.";
+}
+
+async function submitTariff(event) {
+  event.preventDefault();
+  const pinInput = $("tariff-pin");
+  const pin = pinInput.value.trim();
+  if (!pin) { $("tariff-pin-error").hidden = false; pinInput.focus(); return; }
+  const code = $("tariff-select").value;
+  if (code === tariff.code && tariffSet) { closeTariffForm(); return; }
+
+  tariffUi.sending = true;
+  setTariffMessage("");
+  renderTariffCard();
+
+  let status = 0, body = {};
+  try {
+    const res = await fetch("api/tariff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: DEVICE_ID, code, pin }) });
+    status = res.status;
+    body = await res.json().catch(() => ({}));
+  } catch { /* status tetap 0: gagal jaringan */ }
+
+  tariffUi.sending = false;
+  pinInput.value = "";
+
+  if (status === 200) {
+    tariffUi.formOpen = false;
+    // Selesai saat pesan retained baru dari broker tiba, bukan hanya saat server menjawab.
+    tariffUi.pending = code;
+    setTariffMessage("Menyimpan ke alat...", "info");
+    tariffUi.pendingTimer = setTimeout(() => {
+      tariffUi.pending = null;
+      setTariffMessage("Tersimpan di server, tapi halaman ini belum menerima pembaruannya. Muat ulang halaman untuk memastikan.", "bad");
+      renderTariffCard();
+    }, TARIFF_TIMEOUT_MS);
+    renderTariffCard();
+    $("tariff-msg").focus();
+    return;
+  }
+
+  if (status === 429 || status === 503) tariffUi.formOpen = false;
+  setTariffMessage(tariffErrorText(status, body), "bad");
+  renderTariffCard();
+  if (tariffUi.formOpen) pinInput.focus(); else $("btn-tariff").focus();
+}
+
+function applyTariff(raw) {
+  tariff = Tariffs.fromPayload(raw);
+  // Kosong (dihapus) atau kode tak dikenal = belum diatur, tetap memakai tarif awal.
+  let code = null;
+  try { code = raw ? JSON.parse(raw).code : null; } catch { /* payload rusak */ }
+  tariffSet = !!Tariffs.find(code);
+  tariffKnown = true;
+  if (tariffUi.pending && tariff.code === tariffUi.pending) {
+    clearTimeout(tariffUi.pendingTimer);
+    tariffUi.pending = null;
+    setTariffMessage(`Golongan diubah ke ${tariff.label}.`, "good");
+  }
+  renderTariffCard();
+}
+
+function setupTariffCard() {
+  $("btn-tariff").addEventListener("click", openTariffForm);
+  $("tariff-cancel").addEventListener("click", closeTariffForm);
+  $("tariff-form").addEventListener("submit", submitTariff);
+  $("tariff-form").addEventListener("keydown", (event) => { if (event.key === "Escape") closeTariffForm(); });
+  $("tariff-pin").addEventListener("input", () => { $("tariff-pin-error").hidden = true; });
+  renderTariffCard();
 }
 
 function renderAll() {
@@ -377,17 +533,23 @@ function connectMQTT() {
   });
   mqttClient.on("connect", () => {
     setBrokerState("Terhubung", true);
-    mqttClient.subscribe(TOPIC_BILLING_DAILY);
-    mqttClient.subscribe(TOPIC_BILLING_WEEKLY);
+    mqttClient.subscribe([TOPIC_BILLING_DAILY, TOPIC_BILLING_WEEKLY, TOPIC_BILLING_DAILY_KWH, TOPIC_BILLING_WEEKLY_KWH]);
+    // Retained: datang seketika kalau alat ini punya golongan tersimpan. Kalau tidak
+    // ada yang datang dalam beberapa detik, alat ini memakai tarif awal.
+    mqttClient.subscribe(TOPIC_TARIFF);
+    setTimeout(() => { if (!tariffKnown) { tariffKnown = true; renderTariffCard(); renderAll(); } }, 3000);
   });
   mqttClient.on("reconnect", () => setBrokerState("Mencoba ulang", false));
   mqttClient.on("close", () => setBrokerState("Terputus", false));
   mqttClient.on("error", () => setBrokerState("Koneksi bermasalah", false));
   mqttClient.on("message", (topic, message) => {
+    if (topic === TOPIC_TARIFF) { applyTariff(message.toString()); renderAll(); return; }
     try {
       const parsed = JSON.parse(message.toString());
       if (topic === TOPIC_BILLING_DAILY) dailyData = parsed;
       else if (topic === TOPIC_BILLING_WEEKLY) weeklyData = parsed;
+      else if (topic === TOPIC_BILLING_DAILY_KWH) dailyKwhData = parsed;
+      else if (topic === TOPIC_BILLING_WEEKLY_KWH) weeklyKwhData = parsed;
       else return;
       renderAll();
     } catch { /* ignore malformed packet */ }
@@ -398,6 +560,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("downloadExcelBtn").addEventListener("click", downloadMonthExcel);
   $("downloadPdfBtn").addEventListener("click", downloadMonthPdf);
   renderMonthTabs();
+  setupTariffCard();
   renderAll();
   // Tanpa perangkat tidak ada yang bisa di-subscribe; device.js sedang menampilkan pemilihnya.
   if (DEVICE_ID) connectMQTT();

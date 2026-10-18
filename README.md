@@ -112,6 +112,8 @@ Setiap alat punya ID sendiri: `sem-` + 6 karakter terakhir MAC chip-nya (mis. `s
 | `smartmeter/<id>/billing/daily` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM-DD": rupiah }`, retained |
 | `smartmeter/<id>/billing/weekly` | `api/monitor.js` → dashboard/bill.html | JSON `{ "YYYY-MM": { "week1": rupiah, ... } }`, retained |
 | `smartmeter/<id>/billing/daily_start`, `.../weekly_start` | `api/monitor.js` internal | Nilai energi (kWh) di awal tiap hari/minggu, dipakai hitung delta pemakaian, retained |
+| `smartmeter/<id>/billing/daily_kwh`, `.../weekly_kwh` | `api/monitor.js` → bill.html, bot | kWh per hari / per minggu, bentuknya sama dengan `daily`/`weekly`. Disimpan terpisah dari rupiah karena rupiah dibagi tarif baru tidak lagi memberi kWh hari-hari sebelum tarif diganti, retained |
+| `smartmeter/<id>/billing/tariff` | `api/tariff.js`, bot (`/tarif`) → ESP32, cron, bill.html | JSON `{ "code": "R1-900", "rate": 1352 }` golongan tarif alat ini. Tidak ada = tarif awal R-1 1.300 VA. Cron memakai tarif hari itu untuk rupiah hari itu, jadi mengganti golongan tidak mengubah tagihan hari-hari sebelumnya. Di bawah `billing/` supaya izin EMQX yang sudah ada sudah mencakupnya, retained |
 | `smartmeter/_bot/chat/<chatId>` | bot | JSON `{ "active": "sem-a1b2c3", "devices": [...] }`: alat yang terhubung ke chat Telegram itu, retained |
 
 **Pindah dari firmware lama (sebelum 1.15.0):** dulu topiknya `smartmeter/data`, `smartmeter/billing/daily`, dst tanpa ID. Begitu alat pertama muncul dengan firmware baru, `api/monitor.js` otomatis memindahkan histori tagihan, pengingat, dan chat Telegram lama ke alat itu, lalu menghapus topik lama. Ini hanya jalan kalau baru ada **satu** alat di broker, supaya histori tidak salah masuk ke alat lain.
@@ -153,13 +155,19 @@ Tidak ada yang perlu diatur di EMQX, Vercel, atau kode:
 
 Di dashboard cloud, tombol **Ganti** di baris "Perangkat" membuka daftar alat yang pernah dibuka di browser itu dan kolom untuk mengetik ID lain.
 
+### Golongan tarif PLN
+
+Tarif per kWh tiap golongan ada di satu file, `web-remote/tariffs.js`, dipakai dashboard, cron, dan bot. Angkanya tarif triwulan III 2026 (masih berlaku per Oktober 2026). Kalau ESDM/PLN menetapkan tarif baru, ubah angka di file itu lalu deploy; firmware tidak perlu diubah karena alat menerima angkanya lewat `billing/tariff`. Alat yang golongannya sudah diatur tetap memakai angka lama sampai golongannya disimpan ulang dari dashboard atau `/tarif`.
+
+Pemilik alat mengganti golongan dari kartu **Golongan tarif PLN** di halaman Tagihan (pakai PIN alat) atau lewat bot `/tarif <kode>`. Layar OLED menghitung tagihan sebulan dengan tarif terbaru, jadi kalau golongan diganti di tengah bulan angka di OLED adalah perkiraan; angka di dashboard tetap dihitung per hari.
+
 ### Command bot Telegram
 
 **Menautkan alat:** `/hubungkan <ID> <PIN>` (atau pindai QR Telegram di label). Satu chat boleh terhubung ke beberapa alat. Perintah data selalu ke **alat aktif**: `/perangkat` untuk melihat dan mengganti alat aktif, `/lepas` untuk melepas alat aktif. Notifikasi otomatis dikirim ke semua chat yang terhubung ke alatnya, diawali ID alat kalau chat itu terhubung ke lebih dari satu alat. Chat yang belum menautkan alat hanya mendapat petunjuk cara menautkan.
 
 **Menu tombol:** kirim `/start`, `/help`, atau `/menu` — bot membalas dengan tombol yang bisa langsung ditekan (Daya, Energi, Tegangan, Arus, Suhu, Power Factor, Status Lengkap, Batas Daya, Riwayat, Pengingat), jadi tidak perlu hafal nama command. Setiap kali tombol ditekan, menu ikut terkirim lagi bersama jawabannya supaya bisa lanjut menekan tombol berikutnya. Command ketik tetap jalan seperti biasa.
 
-`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/limit` `/status` — cek data (`/suhu` menampilkan suhu chip ESP32). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/help` — bantuan.
+`/watt` `/kwh` `/volt` `/ampere` `/frekuensi` `/pf` `/suhu` `/limit` `/status` — cek data (`/suhu` menampilkan suhu chip ESP32). `/setlimit <angka>` — ubah batas daya (100–10000 Watt). `/riwayat` — grafik & rincian biaya 7 hari terakhir (render via [QuickChart](https://quickchart.io), dikirim sebagai foto). `/reminder <tanggal 1-28> <pesan>` — set pengingat bayar listrik tiap bulan jam 08:00 WIB; `/reminder` tanpa argumen menampilkan pengingat aktif, `/reminder off` mematikannya. `/tarif` — lihat golongan tarif alat aktif beserta daftar kodenya; `/tarif <kode>` (mis. `/tarif R1-900`) menggantinya. `/help` — bantuan.
 
 ## Catatan keamanan
 
@@ -179,6 +187,8 @@ Di dashboard cloud, tombol **Ganti** di baris "Perangkat" membuka daftar alat ya
   - `api/telegram.js` — webhook bot Telegram.
   - `api/monitor.js` — endpoint pengecekan berkala untuk notifikasi otomatis.
   - `api/power.js`: tombol Pemantauan (standby) dashboard, dicek dengan PIN alat.
+  - `api/tariff.js`: simpan golongan tarif dari halaman Tagihan, dicek dengan PIN alat.
+  - `tariffs.js`: daftar golongan tarif PLN, dipakai browser dan server.
   - `lib/devices.js`: ID alat, topik, PIN, dan koneksi MQTT bot yang dipakai bersama semua `api/`.
   - `device.js`: pemilih perangkat di dashboard (ID dari `?device=` atau pilihan terakhir).
   - `scripts/device-label.js`: pembuat label ID/PIN/QR, dijalankan lokal saja.

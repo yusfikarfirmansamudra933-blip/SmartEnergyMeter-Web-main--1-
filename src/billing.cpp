@@ -9,6 +9,7 @@
 bool billingValid = false;
 float billingWeekRp = 0;
 float billingMonthRp = 0;
+float electricityRate = ELECTRICITY_RATE;
 
 namespace
 {
@@ -41,6 +42,7 @@ void load()
     weekKey = prefs.getInt("weekKey", 0);
     monthStart = prefs.getFloat("monthStart", 0);
     weekStart = prefs.getFloat("weekStart", 0);
+    electricityRate = prefs.getFloat("rate", ELECTRICITY_RATE);
     prefs.end();
 }
 }  // namespace
@@ -101,7 +103,23 @@ void billingLoop()
     if (changed)
         save();
 
-    billingWeekRp = (energy - weekStart) * ELECTRICITY_RATE;
-    billingMonthRp = (energy - monthStart) * ELECTRICITY_RATE;
+    // The whole period at the current rate: after a mid-month tariff change
+    // this is an estimate. The cloud bill keeps each day at its own rate.
+    billingWeekRp = (energy - weekStart) * electricityRate;
+    billingMonthRp = (energy - monthStart) * electricityRate;
     billingValid = true;
+}
+
+bool billingSetRate(float rate)
+{
+    if (isnan(rate) || rate < 100 || rate > 5000 || rate == electricityRate)
+        return false;
+
+    electricityRate = rate;
+    prefs.begin("billing", false);
+    prefs.putFloat("rate", rate);
+    prefs.end();
+    // Recompute on the next loop instead of waiting out the interval.
+    lastRun = millis() - BILLING_INTERVAL_MS;
+    return true;
 }

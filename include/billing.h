@@ -12,7 +12,15 @@ extern bool billingValid;
 extern float billingWeekRp;
 extern float billingMonthRp;
 
+// Rp/kWh for this unit. Starts at ELECTRICITY_RATE (config.h) and follows
+// the tariff class set from the cloud (smartmeter/<id>/billing/tariff); kept
+// in NVS so the OLED shows the right bill before MQTT connects.
+extern float electricityRate;
+
 void billingBegin();
 void billingLoop();
+
+// Ignores values outside 100-5000 Rp/kWh. Returns true when the rate changed.
+bool billingSetRate(float rate);
 
 #endif

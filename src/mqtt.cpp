@@ -7,6 +7,7 @@
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
 
+#include "billing.h"
 #include "config.h"
 #include "deviceId.h"
 #include "globals.h"
@@ -36,6 +37,7 @@ String TOPIC_LIMIT;
 String TOPIC_RESTART;
 String TOPIC_RESET;
 String TOPIC_POWER;
+String TOPIC_TARIFF;
 const unsigned long PUBLISH_INTERVAL_MS = 1000;
 unsigned long lastPublish = 0;
 
@@ -125,6 +127,24 @@ void callback(char* topic, byte* payload, unsigned int length)
     // STANDBY / ON
     //======================================================
 
+    //======================================================
+    // TARIF LISTRIK
+    //======================================================
+
+    else if (TOPIC_TARIFF == topic)
+    {
+        // {"code":"R1-900","rate":1352}; an empty payload (cleared) keeps the last rate.
+        StaticJsonDocument<128> doc;
+        if (length == 0 || deserializeJson(doc, message))
+            return;
+
+        if (billingSetRate(doc["rate"] | NAN))
+        {
+            Serial.print("Tarif Baru : ");
+            Serial.println(electricityRate);
+        }
+    }
+
     else if (TOPIC_POWER == topic)
     {
         if (message == "off")
@@ -170,6 +190,7 @@ void mqttBegin()
     TOPIC_RESTART = deviceTopic("cmd/restart");
     TOPIC_RESET   = deviceTopic("cmd/reset");
     TOPIC_POWER   = deviceTopic("cmd/power");
+    TOPIC_TARIFF  = deviceTopic("billing/tariff");
 
     Serial.printf("ID perangkat : %s\n", deviceId());
 
@@ -217,6 +238,8 @@ void mqttReconnect()
         mqtt.subscribe(TOPIC_RESTART.c_str());
         mqtt.subscribe(TOPIC_RESET.c_str());
         mqtt.subscribe(TOPIC_POWER.c_str());
+        // Retained, so the current class arrives right after every connect.
+        mqtt.subscribe(TOPIC_TARIFF.c_str());
     }
 }
 

@@ -1,4 +1,5 @@
 const { normalizeDeviceId, topic, chatTopic, safeParse, fetchRetained, publishAndWait, checkPin } = require("../lib/devices");
+const Tariffs = require("../tariffs");
 
 // Telegram webhook. One bot serves every meter: each chat links itself to a
 // unit with that unit's ID and PIN (printed on its label, see
@@ -213,6 +214,7 @@ const HELP_TEXT = [
   "/reminder <tanggal> <pesan> - pengingat bayar listrik tiap bulan, contoh: /reminder 25 Jangan lupa bayar listrik!",
   "/reminder - lihat pengingat yang aktif",
   "/reminder off - matikan pengingat",
+  "/tarif - lihat atau ganti golongan tarif PLN alat ini",
   "/perangkat - lihat & ganti alat aktif",
   "/hubungkan <ID> <PIN> - tambah alat",
   "/lepas - lepas alat aktif",
@@ -292,6 +294,31 @@ async function handleReminder(deviceId, arg) {
   }
   await publishAndWait(reminderTopic, JSON.stringify(parsed), { retain: true, prefix: PREFIX });
   return `✅ Pengingat diset: tanggal ${parsed.day} tiap bulan, jam ${REMINDER_HOUR_WIB}:00 WIB\nPesan: "${parsed.message}"`;
+}
+
+function rupiahPerKwh(rate) {
+  return `Rp ${rate.toLocaleString("id-ID", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/kWh`;
+}
+
+const TARIFF_LIST = Tariffs.LIST.map((t) => `${t.code}: ${t.label}, ${rupiahPerKwh(t.rate)}`).join("\n");
+
+// "/tarif" shows the active device's class, "/tarif R1-900" changes it. A linked
+// chat already proved the PIN, same rule as /setlimit.
+async function handleTariff(deviceId, arg) {
+  const tariffTopic = topic(deviceId, "billing/tariff");
+  if (!arg) {
+    const current = Tariffs.fromPayload(await fetchTopic(tariffTopic));
+    return [
+      `💡 Golongan tarif ${deviceId}: ${current.label} (${rupiahPerKwh(current.rate)})`,
+      "",
+      "Ganti dengan /tarif <kode>, contoh: /tarif R1-900",
+      TARIFF_LIST,
+    ].join("\n");
+  }
+  const tariff = Tariffs.find(arg);
+  if (!tariff) return `Kode tarif tidak dikenal. Pilih salah satu:\n${TARIFF_LIST}`;
+  await publishAndWait(tariffTopic, JSON.stringify({ code: tariff.code, rate: tariff.rate }), { retain: true, prefix: PREFIX });
+  return `✅ Golongan tarif ${deviceId} diubah ke ${tariff.label} (${rupiahPerKwh(tariff.rate)}). Berlaku untuk pemakaian mulai sekarang; tagihan hari-hari sebelumnya tidak berubah.`;
 }
 
 async function handleSetLimit(deviceId, arg) {
@@ -399,6 +426,9 @@ async function resolveReply(chatId, text) {
   }
   if (command === "reminder" || command === "pengingat") {
     return { text: await handleReminder(deviceId, parsed.arg) };
+  }
+  if (command === "tarif") {
+    return { text: await handleTariff(deviceId, parsed.arg) };
   }
 
   const { status, data } = await fetchDeviceState(deviceId);

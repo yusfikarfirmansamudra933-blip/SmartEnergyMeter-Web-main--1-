@@ -1,4 +1,5 @@
 const { DEVICE_RE, topic, chatTopic, safeParse, collectRetained, publishOn } = require("../lib/devices");
+const Tariffs = require("../tariffs");
 
 // Triggered periodically by an external cron (cron-job.org, every few
 // minutes — Vercel Hobby only allows daily cron, see README). Each tick, for
@@ -37,9 +38,6 @@ const LEGACY_CHAT_ID = "smartmeter/telegram/chatid";
 const LEGACY_CLEAR_ONLY = ["smartmeter/data", "smartmeter/status", "smartmeter/history", "smartmeter/telegram/control_lockout"];
 
 const REMINDER_HOUR_WIB = 8;
-// No per-user rate setting exists (no UI for it) — this is the single
-// source of truth, matching bill.js.
-const ELECTRICITY_RATE = 1444.7;
 const MONTH_NAMES = ["Januari", "Februari", "Maret", "April", "Mei", "Juni", "Juli", "Agustus", "September", "Oktober", "November", "Desember"];
 
 async function sendTelegramMessage(chatId, text) {
@@ -87,7 +85,10 @@ async function notify(device, text) {
 
 // Computes today's/this-week's usage from the device's cumulative energy
 // counter and republishes the shared billing state if anything changed.
+// kWh is stored next to rupiah: once a device's tariff changes, rupiah divided
+// by the new rate no longer gives back the energy of earlier days.
 async function updateBilling(device, energy, wib) {
+  const rate = Tariffs.fromPayload(device.get("billing/tariff")).rate;
   const dayKey = dayKeyOf(wib);
   const monthKey = monthKeyOf(wib);
   const week = weekOfMonth(wib);
@@ -96,21 +97,27 @@ async function updateBilling(device, energy, wib) {
   const weeklyStart = safeParse(device.get("billing/weekly_start"), {});
   const dailyData = safeParse(device.get("billing/daily"), {});
   const weeklyData = safeParse(device.get("billing/weekly"), {});
+  const dailyKwh = safeParse(device.get("billing/daily_kwh"), {});
+  const weeklyKwh = safeParse(device.get("billing/weekly_kwh"), {});
   let changed = false;
 
   if (dailyStart[dayKey] === undefined) { dailyStart[dayKey] = energy; changed = true; }
   let usedDaily = energy - dailyStart[dayKey];
   if (usedDaily < 0) { dailyStart[dayKey] = energy; usedDaily = 0; changed = true; }
-  const dailyRp = usedDaily * ELECTRICITY_RATE;
+  // Only today is recomputed, so a new rate never rewrites earlier days.
+  const dailyRp = usedDaily * rate;
   if (dailyData[dayKey] !== dailyRp) { dailyData[dayKey] = dailyRp; changed = true; }
+  if (dailyKwh[dayKey] !== usedDaily) { dailyKwh[dayKey] = usedDaily; changed = true; }
 
   if (!weeklyStart[monthKey]) weeklyStart[monthKey] = {};
   if (weeklyStart[monthKey]["week" + week] === undefined) { weeklyStart[monthKey]["week" + week] = energy; changed = true; }
   let usedWeekly = energy - weeklyStart[monthKey]["week" + week];
   if (usedWeekly < 0) { weeklyStart[monthKey]["week" + week] = energy; usedWeekly = 0; changed = true; }
   if (!weeklyData[monthKey]) weeklyData[monthKey] = {};
-  const weeklyRp = usedWeekly * ELECTRICITY_RATE;
+  const weeklyRp = usedWeekly * rate;
   if (weeklyData[monthKey]["week" + week] !== weeklyRp) { weeklyData[monthKey]["week" + week] = weeklyRp; changed = true; }
+  if (!weeklyKwh[monthKey]) weeklyKwh[monthKey] = {};
+  if (weeklyKwh[monthKey]["week" + week] !== usedWeekly) { weeklyKwh[monthKey]["week" + week] = usedWeekly; changed = true; }
 
   if (changed) {
     await Promise.all([
@@ -118,6 +125,8 @@ async function updateBilling(device, energy, wib) {
       device.save("billing/weekly_start", JSON.stringify(weeklyStart)),
       device.save("billing/daily", JSON.stringify(dailyData)),
       device.save("billing/weekly", JSON.stringify(weeklyData)),
+      device.save("billing/daily_kwh", JSON.stringify(dailyKwh)),
+      device.save("billing/weekly_kwh", JSON.stringify(weeklyKwh)),
     ]);
   }
 
@@ -127,6 +136,13 @@ async function updateBilling(device, energy, wib) {
 // Sends a once-a-day recap (21:00 WIB) and a once-a-week recap (Sunday
 // 21:00 WIB), each guarded by a retained "already sent today" date so a
 // 5-minute cron doesn't fire it more than once.
+// Energy for a period: the stored kWh when the cron already wrote it, else
+// rupiah back-converted at the current rate (history from before kWh maps).
+function kwhOf(device, kwhValue, rp) {
+  if (Number.isFinite(Number(kwhValue))) return Number(kwhValue);
+  return rp / Tariffs.fromPayload(device.get("billing/tariff")).rate;
+}
+
 async function checkSummaries(device, wib, dailyData, weeklyData) {
   const state = safeParse(device.get("telegram/summary_state"), {});
   const todayKey = dayKeyOf(wib);
@@ -135,10 +151,11 @@ async function checkSummaries(device, wib, dailyData, weeklyData) {
 
   if (hour === 21 && state.lastDaily !== todayKey) {
     const rp = Number(dailyData[todayKey] || 0);
+    const kwh = kwhOf(device, safeParse(device.get("billing/daily_kwh"), {})[todayKey], rp);
     await notify(device, [
       "📋 Ringkasan Hari Ini",
       `${wib.getUTCDate()} ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
-      `Energi: ${(rp / ELECTRICITY_RATE).toFixed(3)} kWh`,
+      `Energi: ${kwh.toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
     ].join("\n"));
     state.lastDaily = todayKey;
@@ -148,10 +165,11 @@ async function checkSummaries(device, wib, dailyData, weeklyData) {
   if (wib.getUTCDay() === 0 && hour === 21 && state.lastWeekly !== todayKey) {
     const week = weekOfMonth(wib);
     const rp = Number((weeklyData[monthKeyOf(wib)] || {})["week" + week] || 0);
+    const kwh = kwhOf(device, (safeParse(device.get("billing/weekly_kwh"), {})[monthKeyOf(wib)] || {})["week" + week], rp);
     await notify(device, [
       "📅 Ringkasan Minggu Ini",
       `Minggu ${week}, ${MONTH_NAMES[wib.getUTCMonth()]} ${wib.getUTCFullYear()}`,
-      `Energi: ${(rp / ELECTRICITY_RATE).toFixed(3)} kWh`,
+      `Energi: ${kwh.toFixed(3)} kWh`,
       `Estimasi biaya: ${formatRupiah(rp)}`,
     ].join("\n"));
     state.lastWeekly = todayKey;

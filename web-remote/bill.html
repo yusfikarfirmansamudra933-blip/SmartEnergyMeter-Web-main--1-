@@ -95,6 +95,39 @@
       </div>
     </section>
 
+    <!-- Golongan tarif menentukan Rp/kWh alat ini. Tata letak dan form PIN-nya meniru kartu
+         Pemantauan di index.html, supaya mengubah pengaturan alat terasa sama di kedua halaman. -->
+    <section aria-labelledby="h-tarif" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4" id="tariff-section">
+      <div class="flex items-start justify-between gap-3">
+        <div class="flex flex-col gap-1 min-w-0">
+          <span class="font-mono text-label uppercase text-ink-2">Golongan tarif PLN</span>
+          <h2 class="text-title text-ink" id="h-tarif">-</h2>
+          <span class="font-mono text-small text-ink-2 num" id="tariff-rate">-</span>
+        </div>
+        <button class="shrink-0 min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="btn-tariff" type="button">Ubah</button>
+      </div>
+      <p class="text-small text-ink-2" id="tariff-note">Memeriksa golongan alat ini...</p>
+
+      <form class="flex flex-col gap-3" hidden id="tariff-form" novalidate>
+        <div class="flex flex-col gap-2">
+          <label class="text-small text-ink font-semibold" for="tariff-select">Golongan</label>
+          <select class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink" id="tariff-select"></select>
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-small text-ink font-semibold" for="tariff-pin">PIN kontrol</label>
+          <input aria-describedby="tariff-pin-hint" autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="tariff-pin" inputmode="numeric" maxlength="6" type="password"/>
+          <p class="text-small text-ink-2" id="tariff-pin-hint">6 angka di label alat. Golongan baru berlaku untuk pemakaian mulai sekarang; tagihan hari sebelumnya tidak berubah.</p>
+          <p class="text-small text-bad-ink" hidden id="tariff-pin-error">Masukkan PIN dulu.</p>
+        </div>
+        <div class="flex gap-2">
+          <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="tariff-submit" type="submit">Simpan</button>
+          <button class="min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="tariff-cancel" type="button">Batal</button>
+        </div>
+      </form>
+
+      <p aria-live="polite" class="text-small" hidden id="tariff-msg" role="status" tabindex="-1"></p>
+    </section>
+
     <section aria-labelledby="h-tren" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3">
       <div class="flex flex-col">
         <span class="font-mono text-label uppercase text-ink-2">Tren pengeluaran</span>
@@ -153,6 +186,7 @@
 <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script src="device.js"></script>
+<script src="tariffs.js"></script>
 <script src="bill.js"></script>
 </body>
 </html>
