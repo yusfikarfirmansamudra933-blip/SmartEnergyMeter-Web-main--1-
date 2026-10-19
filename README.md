@@ -183,7 +183,7 @@ Pemilik alat mengganti golongan dari kartu **Golongan tarif PLN** di halaman Tag
 - `src/`, `include/` — firmware ESP32 (PlatformIO).
 - `data/` — dashboard lokal, di-flash ke LittleFS (`pio run -t uploadfs`). Diakses lewat IP lokal ESP32.
 - `web-remote/` — dashboard cloud + bot Telegram, di-deploy terpisah ke Vercel. Berisi:
-  - `index.html`, `script.js`, `style.css`, `bill.html` — dashboard & halaman tagihan (MQTT over WebSocket).
+  - `index.html`, `script.js`, `theme.css`, `bill.html`: dashboard & halaman tagihan (MQTT over WebSocket).
   - `api/telegram.js` — webhook bot Telegram.
   - `api/monitor.js` — endpoint pengecekan berkala untuk notifikasi otomatis.
   - `api/power.js`: tombol Pemantauan (standby) dashboard, dicek dengan PIN alat.

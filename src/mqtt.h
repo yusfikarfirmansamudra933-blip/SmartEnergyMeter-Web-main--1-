@@ -5,8 +5,6 @@
 
 void mqttBegin();
 
-void mqttReconnect();
-
 void mqttLoop();
 
 void mqttPublish();

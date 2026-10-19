@@ -27,9 +27,6 @@
 
 #define OLED_ADDRESS 0x3C
 
-#define OLED_SDA 21
-#define OLED_SCL 22
-
 /*==============================
         PZEM
 ==============================*/
