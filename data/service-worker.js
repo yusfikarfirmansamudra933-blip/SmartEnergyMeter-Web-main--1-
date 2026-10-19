@@ -1,4 +1,4 @@
-const CACHE_NAME = "SmartEnergyMeter-v3";
+const CACHE_NAME = "SmartEnergyMeter-v4";
 
 const urls = [
     "./",
