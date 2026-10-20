@@ -1,5 +1,6 @@
 const { DEVICE_RE, topic, chatTopic, safeParse, collectRetained, publishOn } = require("../lib/devices");
 const Tariffs = require("../tariffs");
+const { ingest } = require("../lib/ingest");
 
 // Triggered periodically by an external cron (cron-job.org, every few
 // minutes — Vercel Hobby only allows daily cron, see README). Each tick, for
@@ -17,6 +18,8 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const FILTERS = [
   "smartmeter/+/status",
   "smartmeter/+/data",
+  // The last hour of per-minute averages, copied to Supabase by lib/ingest.js.
+  "smartmeter/+/history",
   "smartmeter/+/billing/#",
   "smartmeter/+/telegram/#",
   "smartmeter/_bot/chat/+",
@@ -368,5 +371,11 @@ module.exports = async (req, res) => {
   }
 
   client.end();
-  res.status(200).json({ ok: true, migratedTo, devices: results });
+
+  // After the MQTT work so a slow or unconfigured database never delays alerts.
+  let history = null;
+  try { history = await ingest(deviceValues); }
+  catch (err) { console.error("Supabase ingest failed:", err); history = { error: String(err.message || err) }; }
+
+  res.status(200).json({ ok: true, migratedTo, devices: results, history });
 };

@@ -161,12 +161,20 @@ function renderPowerCard() {
   }
 }
 
+// Pemilik yang sedang masuk (auth.js) dikenali server dari token sesinya, jadi PIN tidak diminta.
+function signedInOwner() {
+  return typeof Account !== "undefined" && Account.isOwner(DEVICE_ID);
+}
+
 function openPowerForm() {
+  const owner = signedInOwner();
   powerUi.formOpen = true;
   setPowerMessage("");
   $("power-pin-error").hidden = true;
+  $("power-pin-group").hidden = owner;
+  $("power-owner-note").hidden = !owner;
   renderPowerCard();
-  $("power-pin").focus();
+  (owner ? $("power-submit") : $("power-pin")).focus();
 }
 
 function closePowerForm() {
@@ -189,7 +197,8 @@ async function submitPower(event) {
   event.preventDefault();
   const pinInput = $("power-pin");
   const pin = pinInput.value.trim();
-  if (!pin) { $("power-pin-error").hidden = false; pinInput.focus(); return; }
+  const owner = signedInOwner();
+  if (!pin && !owner) { $("power-pin-error").hidden = false; pinInput.focus(); return; }
 
   const action = deviceState === "standby" ? "on" : "off";
   powerUi.sending = true;
@@ -198,7 +207,7 @@ async function submitPower(event) {
 
   let status = 0, body = {};
   try {
-    const res = await fetch("api/power", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: DEVICE_ID, action, pin }) });
+    const res = await fetch("api/power", { method: "POST", headers: { "Content-Type": "application/json", ...(owner ? Account.authHeader() : {}) }, body: JSON.stringify({ device: DEVICE_ID, action, pin }) });
     status = res.status;
     body = await res.json().catch(() => ({}));
   } catch { /* status tetap 0: gagal jaringan */ }

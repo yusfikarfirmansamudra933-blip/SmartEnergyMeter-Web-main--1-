@@ -1,9 +1,11 @@
-const { normalizeDeviceId, topic, safeParse, publishAndWait, checkPin } = require("../lib/devices");
+const { normalizeDeviceId, topic, safeParse, publishAndWait } = require("../lib/devices");
+const { authorizeControl } = require("../lib/authorize");
 const Tariffs = require("../tariffs");
 
 // Sets one meter's PLN tariff class from the bill page. Same guard as
 // api/power.js: the browser's MQTT user is read-only and public, so the write
-// happens here with the bot user, after that unit's PIN checks out.
+// happens here with the bot user, for a signed-in owner or after the unit's
+// PIN checks out.
 
 function readBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -15,11 +17,6 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: "Gunakan POST." });
     return;
   }
-  if (!process.env.CONTROL_SECRET) {
-    res.status(503).json({ error: "Kontrol belum diaktifkan. Tambahkan CONTROL_SECRET di pengaturan Vercel." });
-    return;
-  }
-
   const { device, code, pin } = readBody(req);
   const deviceId = normalizeDeviceId(device);
   const tariff = Tariffs.find(code);
@@ -31,12 +28,7 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: "Golongan tarif tidak dikenal." });
     return;
   }
-  if (!pin) {
-    res.status(400).json({ error: "Masukkan PIN." });
-    return;
-  }
-
-  const check = await checkPin(deviceId, pin, "tariff");
+  const check = await authorizeControl(req, deviceId, pin, "tariff");
   if (!check.ok) {
     res.status(check.status).json(check.body);
     return;

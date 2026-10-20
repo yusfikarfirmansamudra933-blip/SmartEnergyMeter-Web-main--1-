@@ -37,7 +37,12 @@ const DEVICE_ID = (() => {
   if (fromUrl) { rememberDevice(fromUrl); return fromUrl; }
   const stored = normalizeDeviceId(readStore("device", null));
   // Taruh ID di alamat supaya halaman yang di-bookmark atau dibagikan membuka alat yang sama.
-  if (stored) history.replaceState(null, "", `${location.pathname}?device=${stored}`);
+  // Parameter lain (mis. ?code= dari link masuk Supabase) dipertahankan untuk auth.js.
+  if (stored) {
+    const params = new URLSearchParams(location.search);
+    params.set("device", stored);
+    history.replaceState(null, "", `${location.pathname}?${params}`);
+  }
   return stored;
 })();
 
@@ -143,7 +148,8 @@ function setupDeviceRow() {
     document.querySelectorAll('a[href="index.html"], a[href="bill.html"]').forEach((a) => {
       a.href = `${a.getAttribute("href")}?device=${DEVICE_ID}`;
     });
-  } else {
+  } else if (!document.body.hasAttribute("data-device-optional")) {
+    // devices.html menampilkan daftar alat sendiri, jadi tidak perlu pemilih wajib.
     deviceUi.required = true;
     openDevicePicker();
   }

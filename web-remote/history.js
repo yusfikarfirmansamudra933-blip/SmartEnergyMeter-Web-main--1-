@@ -1,8 +1,18 @@
 "use strict";
 
-// Kartu "Riwayat 1 jam": rata-rata per menit dari smartmeter/<id>/history (dikirim
-// ESP32 tiap menit, retained). script.js yang memegang koneksi MQTT dan
+// Kartu "Riwayat". Rentang 1 jam: rata-rata per menit dari smartmeter/<id>/history
+// (dikirim ESP32 tiap menit, retained); script.js yang memegang koneksi MQTT dan
 // memanggil applyHistory()/historyWaiting()/historyDenied()/historyDisconnected().
+// Rentang lebih panjang: fungsi device_history di Supabase (auth.js), yang hanya
+// mengembalikan data kalau yang masuk adalah pemilik alat ini.
+
+const HISTORY_RANGES = [
+  { key: "1h", label: "1 jam" },
+  { key: "24h", label: "24 jam", hours: 24, bucket: 5, desc: "Rata-rata tiap 5 menit selama 24 jam terakhir." },
+  { key: "7d", label: "7 hari", hours: 24 * 7, bucket: 60, desc: "Rata-rata tiap jam selama 7 hari terakhir." },
+  { key: "30d", label: "30 hari", hours: 24 * 30, bucket: 240, desc: "Rata-rata tiap 4 jam selama 30 hari terakhir." },
+];
+const LIVE_DESC = "Rata-rata tiap menit. Titik paling kanan adalah menit terakhir.";
 
 const HISTORY_METRICS = [
   { key: "power", label: "Daya", unit: "W", digits: 1, floor: 0 },
@@ -20,6 +30,8 @@ const PAD = { top: 10, right: 10, bottom: 24, left: 52 }; // left dihitung ulang
 const hist = {
   data: null,           // payload terakhir dari ESP32
   state: "loading",     // loading | ready | empty | denied | disconnected
+  range: "1h",
+  remote: {},           // rentang -> { state: loading|ready|error|locked-*, data, at }
   metric: "power",
   cursor: null,         // indeks menit yang sedang ditunjuk, null = tidak ada
   emptyTimer: null,
@@ -27,6 +39,7 @@ const hist = {
 };
 
 try { const saved = localStorage.getItem("historyMetric"); if (HISTORY_METRICS.some((m) => m.key === saved)) hist.metric = saved; } catch { /* pakai default */ }
+try { const saved = localStorage.getItem("historyRange"); if (HISTORY_RANGES.some((r) => r.key === saved)) hist.range = saved; } catch { /* pakai default */ }
 
 const hEl = (id) => document.getElementById(id);
 const metricOf = (key) => HISTORY_METRICS.find((m) => m.key === key);
@@ -61,14 +74,101 @@ function tickDigits(step) {
   return -Math.floor(Math.log10(step) + 1e-9);
 }
 
-function minuteLabel(index, count) {
-  const d = hist.data;
-  const minutesAgo = count - 1 - index;
+// Label waktu titik ke-index. Sumbu X rentang hari cukup tanggalnya (lima label
+// jam+tanggal tidak muat di layar HP); tooltip (full) selalu tanggal dan jam.
+function minuteLabel(index, count, full = false) {
+  const d = activeData();
+  const stepsAgo = count - 1 - index;
   if (d && d.end > 0) {
-    const t = new Date((d.end - minutesAgo * (d.interval || 60)) * 1000);
-    return t.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    const interval = d.interval || 60;
+    const t = new Date((d.end - stepsAgo * interval) * 1000);
+    const time = t.toLocaleTimeString("id-ID", { hour: "2-digit", minute: "2-digit" });
+    if (interval < 3600) return full && interval > 60 ? `${t.toLocaleDateString("id-ID", { day: "numeric", month: "short" })} ${time}` : time;
+    const date = t.toLocaleDateString("id-ID", { day: "numeric", month: "short" });
+    return full ? `${date} ${time}` : date;
   }
-  return minutesAgo === 0 ? "Sekarang" : `-${minutesAgo} mnt`;
+  return stepsAgo === 0 ? "Sekarang" : `-${stepsAgo} mnt`;
+}
+
+function activeData() {
+  return hist.range === "1h" ? hist.data : (hist.remote[hist.range] || {}).data || null;
+}
+
+function renderRanges() {
+  const wrap = hEl("history-ranges");
+  if (!wrap) return;
+  if (!wrap.childElementCount) {
+    HISTORY_RANGES.forEach((r) => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.range = r.key;
+      b.textContent = r.label;
+      b.addEventListener("click", () => selectRange(r.key));
+      wrap.appendChild(b);
+    });
+  }
+  wrap.querySelectorAll("button").forEach((b) => {
+    const active = b.dataset.range === hist.range;
+    b.setAttribute("aria-pressed", String(active));
+    b.className = `min-h-[44px] px-2 rounded-md font-mono text-label transition-colors ${active ? "bg-card text-ink border border-line" : "text-ink-2 hover:text-ink"}`;
+  });
+  const range = HISTORY_RANGES.find((r) => r.key === hist.range);
+  setText("history-desc", range.desc || LIVE_DESC);
+}
+
+function selectRange(key) {
+  hist.range = key;
+  hist.cursor = null;
+  try { localStorage.setItem("historyRange", key); } catch { /* hanya untuk sesi ini */ }
+  if (key !== "1h") loadRemoteHistory(key);
+  renderHistory();
+}
+
+// Riwayat dari Supabase disimpan per rentang selama 2 menit; data per menit baru
+// tersimpan tiap kali cron jalan, jadi mengambil lebih sering tidak menambah apa-apa.
+const REMOTE_TTL_MS = 2 * 60 * 1000;
+
+async function loadRemoteHistory(key, force = false) {
+  const range = HISTORY_RANGES.find((r) => r.key === key);
+  const cached = hist.remote[key];
+  if (!force && cached && cached.state === "ready" && Date.now() - cached.at < REMOTE_TTL_MS) return;
+
+  if (typeof Account === "undefined" || !Account.available) { hist.remote[key] = { state: "error" }; renderHistory(); return; }
+  if (!Account.ready) { hist.remote[key] = { state: "loading" }; renderHistory(); return; }
+  if (!Account.session) { hist.remote[key] = { state: "locked-signin" }; renderHistory(); return; }
+  if (!Account.isOwner(DEVICE_ID)) { hist.remote[key] = { state: "locked-owner" }; renderHistory(); return; }
+
+  hist.remote[key] = { ...(cached || {}), state: cached && cached.data ? "ready" : "loading" };
+  renderHistory();
+
+  const bucketSec = range.bucket * 60;
+  // Sama dengan origin date_bin di device_history (tengah malam WIB), supaya ember
+  // 4 jam di sini jatuh tepat pada ember yang dihitung database.
+  const ORIGIN = Date.UTC(1999, 11, 31, 17) / 1000;
+  const endSec = ORIGIN + Math.floor((Date.now() / 1000 - ORIGIN) / bucketSec) * bucketSec;
+  const n = Math.round((range.hours * 3600) / bucketSec);
+  const fromSec = endSec - (n - 1) * bucketSec;
+  const { data, error } = await sb.rpc("device_history", { p_device: DEVICE_ID, p_from: new Date(fromSec * 1000).toISOString(), p_bucket_minutes: range.bucket });
+  if (error) { hist.remote[key] = { state: "error" }; if (hist.range === key) renderHistory(); return; }
+
+  // Bentuk yang sama dengan payload ESP32 (interval, end, larik per besaran), dengan
+  // null untuk ember tanpa data supaya celahnya tetap tampil sebagai celah.
+  const cols = { power: "power", voltage: "voltage", current: "current", frequency: "frequency", pf: "pf", chipTemperature: "chip_temp" };
+  const out = { interval: bucketSec, end: endSec };
+  Object.keys(cols).forEach((k) => { out[k] = new Array(n).fill(null); });
+  (data || []).forEach((row) => {
+    const i = Math.round((Date.parse(row.ts) / 1000 - fromSec) / bucketSec);
+    if (i < 0 || i >= n) return;
+    Object.entries(cols).forEach(([k, col]) => { if (Number.isFinite(row[col])) out[k][i] = row[col]; });
+  });
+  hist.remote[key] = { state: "ready", data: out, at: Date.now(), empty: !(data || []).length };
+  if (hist.range === key) renderHistory();
+}
+
+// Status akun berubah (masuk, keluar, alat baru diklaim): ambil ulang rentang aktif.
+function historyAccountChanged() {
+  hist.remote = {};
+  if (hist.range !== "1h") loadRemoteHistory(hist.range);
 }
 
 function setEmpty(text) {
@@ -114,6 +214,7 @@ function svgEl(tag, attrs, text) {
 
 function renderHistory() {
   renderTabs();
+  renderRanges();
   const svg = hEl("history-svg");
   const tip = hEl("history-tip");
   if (!svg) return;
@@ -122,7 +223,9 @@ function renderHistory() {
   hist.geometry = null;
 
   const metric = metricOf(hist.metric);
-  const values = hist.data && Array.isArray(hist.data[metric.key]) ? hist.data[metric.key] : [];
+  const range = HISTORY_RANGES.find((r) => r.key === hist.range);
+  const data = activeData();
+  const values = data && Array.isArray(data[metric.key]) ? data[metric.key] : [];
   const real = values.filter((v) => v !== null && Number.isFinite(v));
 
   const messages = {
@@ -130,17 +233,23 @@ function renderHistory() {
     empty: "Riwayat belum ada. ESP32 mengirim titik pertama satu menit setelah menyala.",
     denied: "Dashboard belum diizinkan membaca riwayat. Tambahkan izin Subscribe smartmeter/+/history di EMQX.",
     disconnected: "Tidak terhubung ke broker. Riwayat akan muncul lagi setelah tersambung.",
+    error: "Riwayat panjang gagal dimuat. Periksa koneksi lalu pilih rentangnya lagi.",
+    "locked-signin": `Riwayat ${range.label} hanya untuk pemilik alat. Masuk lewat tab Alat di bawah.`,
+    "locked-owner": `Alat ini belum ada di akun Anda. Tambahkan lewat tab Alat (pakai PIN dari label) untuk melihat riwayat ${range.label}.`,
   };
-  if (hist.state !== "ready") {
+  const state = hist.range === "1h" ? hist.state : (hist.remote[hist.range] || { state: "loading" }).state;
+  if (state !== "ready") {
     setText("history-last", "-");
     setText("history-stats", "");
-    setEmpty(messages[hist.state]);
+    setEmpty(messages[state] || messages.loading);
     return;
   }
   if (!real.length) {
     setText("history-last", "-");
     setText("history-stats", "");
-    setEmpty(`Belum ada data ${metric.label.toLowerCase()} dalam 1 jam terakhir.`);
+    setEmpty(hist.range === "1h"
+      ? `Belum ada data ${metric.label.toLowerCase()} dalam 1 jam terakhir.`
+      : `Belum ada data ${metric.label.toLowerCase()} tersimpan untuk ${range.label} terakhir. Riwayat panjang mulai tercatat sejak akun diaktifkan.`);
     return;
   }
   setEmpty("");
@@ -227,7 +336,7 @@ function drawCursor() {
   svg.appendChild(svgEl("line", { "data-cursor": "", x1: cx, x2: cx, y1: PAD.top, y2: CHART_H - PAD.bottom, style: "stroke:var(--ink)", "stroke-width": 1.5 }));
   if (Number.isFinite(v)) svg.appendChild(svgEl("circle", { "data-cursor": "", cx, cy: g.y(v), r: 4, style: "fill:var(--accent);stroke:var(--card)", "stroke-width": 2 }));
 
-  tip.textContent = `${minuteLabel(i, g.n)} · ${Number.isFinite(v) ? withUnit(v, g.metric) : "tidak ada data"}`;
+  tip.textContent = `${minuteLabel(i, g.n, true)} · ${Number.isFinite(v) ? withUnit(v, g.metric) : "tidak ada data"}`;
   tip.hidden = false;
   const tipW = tip.offsetWidth;
   tip.style.left = `${Math.max(0, Math.min(g.width - tipW, cx - tipW / 2))}px`;
@@ -267,6 +376,8 @@ function setupHistoryChart() {
 
   let resizeTimer;
   window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(renderHistory, 150); });
+  if (typeof Account !== "undefined") Account.onChange(historyAccountChanged);
+  else if (hist.range !== "1h") loadRemoteHistory(hist.range);
   renderHistory();
 }
 

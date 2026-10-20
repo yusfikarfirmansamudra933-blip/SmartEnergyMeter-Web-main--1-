@@ -113,12 +113,15 @@
           <label class="text-small text-ink font-semibold" for="tariff-select">Golongan</label>
           <select class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink" id="tariff-select"></select>
         </div>
-        <div class="flex flex-col gap-2">
+        <!-- Pemilik yang sedang masuk tidak perlu PIN: grup ini disembunyikan untuknya. -->
+        <div class="flex flex-col gap-2" id="tariff-pin-group">
           <label class="text-small text-ink font-semibold" for="tariff-pin">PIN kontrol</label>
           <input aria-describedby="tariff-pin-hint" autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="tariff-pin" inputmode="numeric" maxlength="6" type="password"/>
-          <p class="text-small text-ink-2" id="tariff-pin-hint">6 angka di label alat. Golongan baru berlaku untuk pemakaian mulai sekarang; tagihan hari sebelumnya tidak berubah.</p>
+          <p class="text-small text-ink-2" id="tariff-pin-hint">6 angka di label alat.</p>
           <p class="text-small text-bad-ink" hidden id="tariff-pin-error">Masukkan PIN dulu.</p>
         </div>
+        <p class="text-small text-accent-ink" hidden id="tariff-owner-note">Anda masuk sebagai pemilik alat ini, jadi PIN tidak diperlukan.</p>
+        <p class="text-small text-ink-2">Golongan baru berlaku untuk pemakaian mulai sekarang; tagihan hari sebelumnya tidak berubah.</p>
         <div class="flex gap-2">
           <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="tariff-submit" type="submit">Simpan</button>
           <button class="min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="tariff-cancel" type="button">Batal</button>
@@ -176,6 +179,7 @@
 
 <nav aria-label="Navigasi utama" class="fixed bottom-0 w-full z-50 pb-safe bg-card border-t border-line">
   <div class="flex justify-around items-center h-16 px-2">
+    <a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-ink-2 hover:text-ink border-t-2 border-transparent" href="devices.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">devices</span><span class="font-mono text-label mt-0.5">Alat</span></a>
     <a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-ink-2 hover:text-ink border-t-2 border-transparent" href="index.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">speed</span><span class="font-mono text-label mt-0.5">Monitor</span></a>
     <a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-accent-ink border-t-2 border-accent-ink" href="bill.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">receipt_long</span><span class="font-mono text-label mt-0.5">Tagihan</span></a>
   </div>
@@ -184,8 +188,10 @@
 <script src="https://unpkg.com/xlsx/dist/xlsx.full.min.js"></script>
 <script src="https://unpkg.com/jspdf@2.5.2/dist/jspdf.umd.min.js"></script>
 <script src="https://unpkg.com/jspdf-autotable@3.8.4/dist/jspdf.plugin.autotable.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
 <script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
 <script src="device.js"></script>
+<script src="auth.js"></script>
 <script src="tariffs.js"></script>
 <script src="bill.js"></script>
 </body>

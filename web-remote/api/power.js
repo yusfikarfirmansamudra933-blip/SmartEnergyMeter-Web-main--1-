@@ -1,13 +1,15 @@
-const { normalizeDeviceId, topic, safeParse, publishAndWait, checkPin } = require("../lib/devices");
+const { normalizeDeviceId, topic, safeParse, publishAndWait } = require("../lib/devices");
+const { authorizeControl } = require("../lib/authorize");
 
 // Turns one meter's monitoring on or off (standby) from the cloud dashboard.
 // The dashboard's own MQTT user is read-only and its credentials are public,
 // so commands go through here instead: this function holds the bot user's
-// credentials server-side and only publishes after that unit's PIN checks out.
+// credentials server-side and only publishes for a signed-in owner of the unit
+// or after the unit's PIN checks out.
 //
-// Needs a CONTROL_SECRET environment variable in Vercel (see lib/devices.js
-// for how each unit's PIN is derived from it). Without it the endpoint
-// refuses every request rather than falling back to an open control.
+// The PIN path needs a CONTROL_SECRET environment variable in Vercel (see
+// lib/devices.js for how each unit's PIN is derived from it). Without it only
+// signed-in owners get through, never an open control.
 
 function readBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
@@ -19,11 +21,6 @@ module.exports = async (req, res) => {
     res.status(405).json({ error: "Gunakan POST." });
     return;
   }
-  if (!process.env.CONTROL_SECRET) {
-    res.status(503).json({ error: "Kontrol belum diaktifkan. Tambahkan CONTROL_SECRET di pengaturan Vercel." });
-    return;
-  }
-
   const { device, action, pin } = readBody(req);
   const deviceId = normalizeDeviceId(device);
   if (!deviceId) {
@@ -34,12 +31,7 @@ module.exports = async (req, res) => {
     res.status(400).json({ error: "Perintah tidak dikenal." });
     return;
   }
-  if (!pin) {
-    res.status(400).json({ error: "Masukkan PIN." });
-    return;
-  }
-
-  const check = await checkPin(deviceId, pin, "power");
+  const check = await authorizeControl(req, deviceId, pin, "power");
   if (!check.ok) {
     res.status(check.status).json(check.body);
     return;

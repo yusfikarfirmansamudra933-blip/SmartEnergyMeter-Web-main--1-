@@ -405,6 +405,10 @@ function renderTariffCard() {
   $("tariff-submit").textContent = tariffUi.sending ? "Menyimpan..." : "Simpan";
 }
 
+function signedInOwner() {
+  return typeof Account !== "undefined" && Account.isOwner(DEVICE_ID);
+}
+
 function openTariffForm() {
   const select = $("tariff-select");
   select.innerHTML = "";
@@ -415,9 +419,13 @@ function openTariffForm() {
     opt.selected = t.code === tariff.code;
     select.appendChild(opt);
   });
+  // Pemilik yang sedang masuk (auth.js) dikenali server dari token sesinya, jadi PIN tidak diminta.
+  const owner = signedInOwner();
   tariffUi.formOpen = true;
   setTariffMessage("");
   $("tariff-pin-error").hidden = true;
+  $("tariff-pin-group").hidden = owner;
+  $("tariff-owner-note").hidden = !owner;
   renderTariffCard();
   select.focus();
 }
@@ -441,7 +449,8 @@ async function submitTariff(event) {
   event.preventDefault();
   const pinInput = $("tariff-pin");
   const pin = pinInput.value.trim();
-  if (!pin) { $("tariff-pin-error").hidden = false; pinInput.focus(); return; }
+  const owner = signedInOwner();
+  if (!pin && !owner) { $("tariff-pin-error").hidden = false; pinInput.focus(); return; }
   const code = $("tariff-select").value;
   if (code === tariff.code && tariffSet) { closeTariffForm(); return; }
 
@@ -451,7 +460,7 @@ async function submitTariff(event) {
 
   let status = 0, body = {};
   try {
-    const res = await fetch("api/tariff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ device: DEVICE_ID, code, pin }) });
+    const res = await fetch("api/tariff", { method: "POST", headers: { "Content-Type": "application/json", ...(owner ? Account.authHeader() : {}) }, body: JSON.stringify({ device: DEVICE_ID, code, pin }) });
     status = res.status;
     body = await res.json().catch(() => ({}));
   } catch { /* status tetap 0: gagal jaringan */ }

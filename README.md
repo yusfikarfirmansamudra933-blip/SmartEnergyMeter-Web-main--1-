@@ -118,6 +118,29 @@ Setiap alat punya ID sendiri: `sem-` + 6 karakter terakhir MAC chip-nya (mis. `s
 
 **Pindah dari firmware lama (sebelum 1.15.0):** dulu topiknya `smartmeter/data`, `smartmeter/billing/daily`, dst tanpa ID. Begitu alat pertama muncul dengan firmware baru, `api/monitor.js` otomatis memindahkan histori tagihan, pengingat, dan chat Telegram lama ke alat itu, lalu menghapus topik lama. Ini hanya jalan kalau baru ada **satu** alat di broker, supaya histori tidak salah masuk ke alat lain.
 
+## Akun pemilik & riwayat panjang (Supabase)
+
+Data live tetap lewat MQTT. Supabase (project `omrjqsolejpxiduogzfn`, region Singapura) menyimpan dua hal yang tidak muat di pesan retained:
+
+- **Riwayat panjang.** Setiap kali `api/monitor.js` jalan, `lib/ingest.js` menyalin `smartmeter/<id>/history` (60 menit terakhir) ke tabel `readings_minute`, dan `billing/daily` + `billing/daily_kwh` ke `billing_daily`. Penulisan memakai upsert per (alat, menit) dan (alat, hari), jadi aman dijalankan berulang. Selama cron jalan minimal sekali sejam, tidak ada menit yang terlewat. Data per menit disimpan 30 hari; job `pg_cron` `rollup-old-readings` (03.15 WIB) merangkumnya ke `readings_hour` lalu menghapus menit lama.
+- **Akun pemilik.** Masuk dengan link email atau Google (`auth.js`). Di halaman **Alat** (`devices.html`), pemilik menambah alat dengan ID + PIN label (`api/claim.js`), memberi nama, atau melepasnya. Satu alat boleh punya beberapa pemilik. Pemilik yang sedang masuk bisa membuka grafik 24 jam / 7 hari / 30 hari (fungsi `device_history`) dan memakai tombol Pemantauan serta Golongan tarif **tanpa PIN** (`lib/authorize.js`). Tanpa masuk, semuanya tetap bisa dipakai dengan PIN seperti sebelumnya.
+
+| Tabel | Isi | Siapa yang bisa baca (RLS) |
+|---|---|---|
+| `devices` | ID alat, pertama dan terakhir terlihat | pemiliknya |
+| `device_owners` | alat ↔ akun, nama alat | akun itu sendiri (boleh ubah nama dan melepas) |
+| `readings_minute` | rata-rata per menit: daya, tegangan, arus, frekuensi, PF, suhu chip | pemilik alat |
+| `readings_hour` | rangkuman per jam (rata-rata, min/maks) untuk data lebih dari 30 hari | pemilik alat |
+| `billing_daily` | Rp dan kWh per hari | pemilik alat |
+
+Hanya server (kunci secret) yang menulis; browser memakai kunci publishable dan hanya bisa membaca baris milik akunnya. Setelan sekali saja:
+
+1. Vercel: tambah `SUPABASE_SECRET_KEY` (Supabase → Project Settings → API Keys → Secret key), lalu deploy ulang. Tanpa ini riwayat tidak tersalin dan `api/claim` menolak permintaan.
+2. Supabase → Authentication → URL Configuration: Site URL `https://web-remote-nine.vercel.app`, dan Redirect URLs `https://web-remote-nine.vercel.app/**`.
+3. Login Google: buat OAuth Client (Web application) di Google Cloud Console dengan Authorized redirect URI `https://omrjqsolejpxiduogzfn.supabase.co/auth/v1/callback`, lalu isi Client ID dan Client Secret di Supabase → Authentication → Sign In / Providers → Google.
+
+Email link masuk memakai SMTP bawaan Supabase, yang dibatasi beberapa email per jam. Cukup untuk sedikit pemilik; untuk banyak pengguna pasang SMTP sendiri.
+
 ## Menyiapkan dashboard cloud & bot Telegram (`web-remote/`)
 
 1. `cd web-remote && npm install`
@@ -187,7 +210,10 @@ Pemilik alat mengganti golongan dari kartu **Golongan tarif PLN** di halaman Tag
   - `api/telegram.js` — webhook bot Telegram.
   - `api/monitor.js` — endpoint pengecekan berkala untuk notifikasi otomatis.
   - `api/power.js`: tombol Pemantauan (standby) dashboard, dicek dengan PIN alat.
-  - `api/tariff.js`: simpan golongan tarif dari halaman Tagihan, dicek dengan PIN alat.
+  - `api/tariff.js`: simpan golongan tarif dari halaman Tagihan, dicek dengan PIN alat atau akun pemilik.
+  - `api/claim.js`: tambah alat ke akun yang sedang masuk (ID + PIN).
+  - `lib/supabase.js`, `lib/ingest.js`, `lib/authorize.js`: akses Supabase dari server, penyalinan riwayat, dan cek pemilik/PIN.
+  - `auth.js`, `devices.html`, `devices.js`: akun pemilik dan halaman Alat.
   - `tariffs.js`: daftar golongan tarif PLN, dipakai browser dan server.
   - `lib/devices.js`: ID alat, topik, PIN, dan koneksi MQTT bot yang dipakai bersama semua `api/`.
   - `device.js`: pemilih perangkat di dashboard (ID dari `?device=` atau pilihan terakhir).

@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Alat Saya</title>
+<!-- Pasang tema sebelum halaman digambar supaya tidak berkedip. Tanpa localStorage: tema terang. -->
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")==="dark"?"dark":"light"}catch(e){}</script>
+<link href="manifest.json" rel="manifest"/>
+<link href="icon-192.png?v=2" rel="icon"/>
+<link href="icon-192.png?v=2" rel="apple-touch-icon"/>
+<meta content="#059669" id="meta-theme-color" name="theme-color"/>
+<meta content="yes" name="apple-mobile-web-app-capable"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="theme.css" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="theme.js"></script>
+</head>
+<body class="bg-surface font-sans text-body text-ink flex flex-col min-h-screen selection:bg-accent selection:text-on-btn" data-device-optional>
+
+<header class="fixed top-0 w-full z-50 pt-safe bg-card border-b border-line">
+  <div class="h-16 px-4 flex items-center justify-between gap-2">
+    <div class="flex flex-col gap-1 min-w-0 flex-1">
+      <span class="text-title text-ink tracking-tight truncate uppercase leading-none font-bold">Smart Energy Meter</span>
+      <div class="flex items-center gap-2">
+        <span class="inline-flex items-center gap-1.5">
+          <span class="inline-flex h-2 w-2 rounded-full" id="brokerDot" style="background:var(--warn)"></span>
+          <span class="font-mono text-label" id="brokerBadge" style="color:var(--warn-ink)">Memeriksa akun</span>
+        </span>
+      </div>
+    </div>
+    <button aria-label="Ganti ke tema gelap" aria-pressed="false" class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-ink-2 hover:text-ink hover:bg-inset transition-colors" id="btn-theme" type="button">
+      <span aria-hidden="true" class="material-symbols-outlined text-[22px]" id="btn-theme-icon">dark_mode</span>
+    </button>
+  </div>
+</header>
+
+<main class="flex flex-col w-full pt-16 pb-24 min-h-screen">
+  <div class="flex flex-col px-4 py-4 gap-4">
+
+    <div class="flex flex-col gap-1">
+      <h1 class="text-headline text-ink">Alat saya</h1>
+      <p class="text-small text-ink-2">Semua meter yang terhubung ke akun Anda, dalam satu daftar.</p>
+    </div>
+
+    <p class="text-small text-ink-2" id="account-loading" role="status">Memeriksa akun...</p>
+
+    <!-- Belum masuk: satu kartu, dua cara masuk. Google di atas karena satu ketukan; email untuk yang tidak memakai Google. -->
+    <section aria-labelledby="h-masuk" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4" hidden id="signed-out">
+      <div class="flex flex-col gap-1">
+        <span class="font-mono text-label uppercase text-ink-2">Akun pemilik</span>
+        <h2 class="text-title text-ink" id="h-masuk">Masuk untuk melihat alat Anda</h2>
+        <p class="text-small text-ink-2">Pemilik alat bisa melihat riwayat sampai 30 hari dan mengendalikan alat tanpa mengetik PIN.</p>
+      </div>
+      <button class="w-full min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="btn-google" type="button">Masuk dengan Google</button>
+      <div aria-hidden="true" class="flex items-center gap-3"><span class="flex-1 h-px bg-line"></span><span class="font-mono text-label uppercase text-ink-2">atau</span><span class="flex-1 h-px bg-line"></span></div>
+      <form class="flex flex-col gap-2" id="email-form" novalidate>
+        <label class="text-small text-ink font-semibold" for="email-input">Email</label>
+        <input autocomplete="email" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink" id="email-input" inputmode="email" type="email"/>
+        <p class="text-small text-bad-ink" hidden id="email-error">Tulis alamat email yang benar.</p>
+        <button class="w-full min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="email-submit" type="submit">Kirim link masuk</button>
+      </form>
+      <p aria-live="polite" class="text-small" hidden id="signin-msg" role="status" tabindex="-1"></p>
+    </section>
+
+    <!-- Sudah masuk: baris akun memakai gaya baris inset yang sama dengan baris "Perangkat" di halaman lain. -->
+    <div class="flex items-center justify-between gap-2 rounded-lg bg-inset pl-3 pr-1 py-1" hidden id="signed-in">
+      <div class="flex flex-col min-w-0">
+        <span class="font-mono text-label uppercase text-ink-2">Masuk sebagai</span>
+        <span class="text-body text-ink font-semibold truncate" id="account-email">-</span>
+      </div>
+      <button class="shrink-0 min-h-[44px] px-3 rounded-lg text-ink hover:bg-card transition-colors font-semibold" id="btn-signout" type="button">Keluar</button>
+    </div>
+
+    <section aria-labelledby="h-daftar" class="flex flex-col gap-2" hidden id="device-section">
+      <h2 class="font-mono text-label uppercase text-ink-2" id="h-daftar">Daftar alat</h2>
+      <div class="flex flex-col gap-2" id="device-list"></div>
+      <p class="rounded-xl bg-card border border-line p-5 text-center text-small text-ink-2" hidden id="device-empty">Belum ada alat di akun ini. Tambahkan dengan ID dan PIN dari label alat.</p>
+    </section>
+
+    <section aria-labelledby="h-tambah" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" hidden id="add-section">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-title text-ink" id="h-tambah">Tambah alat</h2>
+        <p class="text-small text-ink-2">ID dan PIN ada di label alat. ID juga tampil di layar OLED, pada halaman yang judulnya diawali "ID sem-".</p>
+      </div>
+      <form class="flex flex-col gap-3" id="add-form" novalidate>
+        <div class="flex flex-col gap-2">
+          <label class="text-small text-ink font-semibold" for="add-id">ID perangkat</label>
+          <input autocapitalize="off" autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono" id="add-id" placeholder="sem-a1b2c3" spellcheck="false" type="text"/>
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-small text-ink font-semibold" for="add-pin">PIN kontrol</label>
+          <input autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink font-mono tracking-widest" id="add-pin" inputmode="numeric" maxlength="6" type="password"/>
+        </div>
+        <div class="flex flex-col gap-2">
+          <label class="text-small text-ink font-semibold" for="add-name">Nama (boleh dikosongkan)</label>
+          <input autocomplete="off" class="w-full min-h-[44px] px-3 rounded-lg bg-inset border border-line text-body text-ink" id="add-name" maxlength="40" placeholder="Dapur" type="text"/>
+        </div>
+        <p class="text-small text-bad-ink" hidden id="add-error"></p>
+        <button class="w-full min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity" id="add-submit" type="submit">Tambahkan ke akun</button>
+      </form>
+      <p aria-live="polite" class="text-small" hidden id="add-msg" role="status" tabindex="-1"></p>
+    </section>
+
+    <p class="rounded-xl bg-card border border-line p-5 text-small text-bad-ink" hidden id="account-unavailable">Layanan akun tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.</p>
+
+  </div>
+</main>
+
+<nav aria-label="Navigasi utama" class="fixed bottom-0 w-full z-50 pb-safe bg-card border-t border-line">
+  <div class="flex justify-around items-center h-16 px-2">
+    <a aria-current="page" class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-accent-ink border-t-2 border-accent-ink" href="devices.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">devices</span><span class="font-mono text-label mt-0.5">Alat</span></a>
+    <a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-ink-2 hover:text-ink border-t-2 border-transparent" href="index.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">speed</span><span class="font-mono text-label mt-0.5">Monitor</span></a>
+    <a class="flex flex-col items-center justify-center min-w-[44px] min-h-[44px] flex-1 py-1 text-ink-2 hover:text-ink border-t-2 border-transparent" href="bill.html"><span aria-hidden="true" class="material-symbols-outlined text-[22px]">receipt_long</span><span class="font-mono text-label mt-0.5">Tagihan</span></a>
+  </div>
+</nav>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
+<script src="https://unpkg.com/mqtt/dist/mqtt.min.js"></script>
+<script src="device.js"></script>
+<script src="auth.js"></script>
+<script src="devices.js"></script>
+</body>
+</html>
