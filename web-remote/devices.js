@@ -253,19 +253,24 @@ async function addDevice(event) {
   if (!/^\d{6}$/.test(pin)) return showError("PIN terdiri dari 6 angka.", "add-pin");
 
   $("add-submit").disabled = true;
+  const status = await claimDevice(id, pin, $("add-name").value);
+  $("add-submit").disabled = false;
+  $("add-pin").value = "";
+  if (status === 200) { $("add-id").value = ""; $("add-name").value = ""; }
+  $("add-msg").focus();
+}
+
+// Mengirim ID + PIN ke api/claim. Mengembalikan status HTTP (0 = gagal jaringan).
+async function claimDevice(id, pin, name) {
   setMsg("add-msg", "Memeriksa PIN...", "info");
   let status = 0, body = {};
   try {
-    const res = await fetch("api/claim", { method: "POST", headers: { "Content-Type": "application/json", ...Account.authHeader() }, body: JSON.stringify({ device: id, pin, name: $("add-name").value }) });
+    const res = await fetch("api/claim", { method: "POST", headers: { "Content-Type": "application/json", ...Account.authHeader() }, body: JSON.stringify({ device: id, pin, name }) });
     status = res.status;
     body = await res.json().catch(() => ({}));
   } catch { /* status 0: gagal jaringan */ }
-  $("add-submit").disabled = false;
-  $("add-pin").value = "";
 
   if (status === 200) {
-    $("add-id").value = "";
-    $("add-name").value = "";
     setMsg("add-msg", `${id} ditambahkan ke akun.`, "good");
     rememberDevice(id);
     await Account.refreshOwned();
@@ -273,6 +278,50 @@ async function addDevice(event) {
   } else {
     setMsg("add-msg", claimErrorText(status, body), "bad");
   }
+  return status;
+}
+
+// --- QR di label: devices.html#claim=sem-a1b2c3_123456 ---
+// Bagian # tidak pernah dikirim ke server, jadi PIN tidak tercatat di log mana pun.
+// Disimpan sebentar di browser supaya tetap ada setelah pengguna pergi login
+// (link email atau Google kembali ke halaman ini tanpa #claim).
+const PENDING_KEY = "pendingClaim";
+const PENDING_TTL_MS = 30 * 60 * 1000;
+
+function clearPendingClaim() {
+  try { localStorage.removeItem(PENDING_KEY); } catch { /* storage diblokir */ }
+}
+
+function readPendingClaim() {
+  try {
+    const p = JSON.parse(localStorage.getItem(PENDING_KEY) || "null");
+    if (p && Date.now() - p.at < PENDING_TTL_MS && normalizeDeviceId(p.id) && /^\d{6}$/.test(p.pin)) return p;
+  } catch { /* storage diblokir */ }
+  clearPendingClaim();
+  return null;
+}
+
+(function captureClaimFromQr() {
+  const m = location.hash.match(/^#claim=([^_]+)_(\d{6})$/);
+  if (!m) return;
+  history.replaceState(null, "", location.pathname + location.search);
+  const id = normalizeDeviceId(m[1]);
+  if (!id) return;
+  try { localStorage.setItem(PENDING_KEY, JSON.stringify({ id, pin: m[2], at: Date.now() })); } catch { /* storage diblokir */ }
+  rememberDevice(id);
+})();
+
+let claimRunning = false;
+async function runPendingClaim() {
+  const p = readPendingClaim();
+  $("claim-note").hidden = !p || !!Account.session;
+  if (p) $("claim-note-id").textContent = p.id;
+  if (!p || !Account.session || claimRunning) return;
+  if (Account.isOwner(p.id)) { clearPendingClaim(); setMsg("add-msg", `${p.id} sudah ada di akun Anda.`, "good"); return; }
+  claimRunning = true;
+  const status = await claimDevice(p.id, p.pin, null);
+  claimRunning = false;
+  if (status !== 0) clearPendingClaim(); // gagal jaringan: dicoba lagi saat halaman dibuka lagi
   $("add-msg").focus();
 }
 
@@ -289,4 +338,5 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-signout").addEventListener("click", async () => { await Account.signOut(); setMsg("add-msg", ""); });
   $("add-form").addEventListener("submit", addDevice);
   Account.onChange(renderAccount);
+  Account.onChange(runPendingClaim);
 });

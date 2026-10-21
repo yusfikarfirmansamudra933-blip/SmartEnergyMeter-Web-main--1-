@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 "use strict";
 
-// Prints labels for meters: ID, PIN, a QR code to the cloud dashboard and one
-// that links Telegram to the unit. Run on your own computer, never on Vercel:
+// Prints labels for meters: ID, PIN, a QR code that adds the unit to the
+// scanner's account on the cloud dashboard (devices.html#claim=..., after they
+// sign in), and one that links Telegram to the unit. Run on your own computer,
+// never on Vercel:
 //
 //   node scripts/device-label.js --new-secret
 //       Creates control-secret.local.txt (only once). Put the same value in
@@ -71,7 +73,8 @@ const labels = ids.map((id) => {
   return {
     id,
     pin,
-    dashboard: `${baseUrl}/?device=${id}`,
+    // In the # part so the PIN never reaches a server log.
+    dashboard: `${baseUrl}/devices.html#claim=${id}_${pin}`,
     telegram: bot ? `https://t.me/${bot.replace(/^@/, "")}?start=${id}_${pin}` : null,
   };
 });
@@ -84,7 +87,7 @@ const cards = labels.map((l) => `
     </header>
     <div class="pin"><span>PIN kontrol</span><strong>${escape(l.pin)}</strong></div>
     <div class="codes">
-      <figure><div class="qr" data-text="${escape(l.dashboard)}"></div><figcaption>Dashboard</figcaption></figure>
+      <figure><div class="qr" data-text="${escape(l.dashboard)}"></div><figcaption>Pasang di akun</figcaption></figure>
       ${l.telegram ? `<figure><div class="qr" data-text="${escape(l.telegram)}"></div><figcaption>Telegram</figcaption></figure>` : ""}
     </div>
     <p class="note">Simpan PIN ini. Siapa pun yang memegangnya bisa mematikan pemantauan dan mengubah batas daya alat ini.</p>

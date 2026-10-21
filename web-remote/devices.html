@@ -55,6 +55,8 @@
         <h2 class="text-title text-ink" id="h-masuk">Masuk untuk melihat alat Anda</h2>
         <p class="text-small text-ink-2">Pemilik alat bisa melihat riwayat sampai 30 hari dan mengendalikan alat tanpa mengetik PIN.</p>
       </div>
+      <!-- Muncul setelah QR label dipindai: alatnya sudah diingat, tinggal masuk. -->
+      <p class="rounded-lg bg-accent-soft text-accent-ink text-small px-3 py-2" hidden id="claim-note">Alat <span class="font-mono font-semibold" id="claim-note-id"></span> dari QR akan langsung ditambahkan ke akun Anda setelah masuk.</p>
       <button class="w-full min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="btn-google" type="button">Masuk dengan Google</button>
       <div aria-hidden="true" class="flex items-center gap-3"><span class="flex-1 h-px bg-line"></span><span class="font-mono text-label uppercase text-ink-2">atau</span><span class="flex-1 h-px bg-line"></span></div>
       <form class="flex flex-col gap-2" id="email-form" novalidate>
@@ -106,6 +108,8 @@
     </section>
 
     <p class="rounded-xl bg-card border border-line p-5 text-small text-bad-ink" hidden id="account-unavailable">Layanan akun tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.</p>
+
+    <a class="self-start min-h-[44px] inline-flex items-center text-small text-ink-2 underline underline-offset-2 hover:text-ink" href="privacy.html">Kebijakan privasi</a>
 
   </div>
 </main>

@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Kebijakan Privasi</title>
+<meta content="Data apa yang dikumpulkan Smart Energy Meter, untuk apa, dan cara menghapusnya." name="description"/>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")==="dark"?"dark":"light"}catch(e){}</script>
+<link href="icon-192.png?v=2" rel="icon"/>
+<meta content="#059669" id="meta-theme-color" name="theme-color"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="theme.css" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="theme.js"></script>
+</head>
+<body class="bg-surface font-sans text-body text-ink min-h-screen">
+
+<header class="w-full bg-card border-b border-line">
+  <div class="h-16 px-4 max-w-2xl mx-auto flex items-center justify-between gap-2">
+    <a class="min-h-[44px] inline-flex items-center gap-1.5 text-ink font-semibold hover:text-accent-ink" href="devices.html">
+      <span aria-hidden="true" class="material-symbols-outlined text-[20px]">arrow_back</span>
+      <span>Kembali</span>
+    </a>
+    <button aria-label="Ganti ke tema gelap" aria-pressed="false" class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-ink-2 hover:text-ink hover:bg-inset transition-colors" id="btn-theme" type="button">
+      <span aria-hidden="true" class="material-symbols-outlined text-[22px]" id="btn-theme-icon">dark_mode</span>
+    </button>
+  </div>
+</header>
+
+<!-- Halaman baca: satu kolom sempit dengan judul bagian, supaya kalimat panjang tetap nyaman dibaca di HP. -->
+<main class="px-4 py-6 max-w-2xl mx-auto flex flex-col gap-6">
+  <div class="flex flex-col gap-1">
+    <span class="font-mono text-label uppercase text-ink-2">Smart Energy Meter</span>
+    <h1 class="text-headline text-ink">Kebijakan privasi</h1>
+    <p class="text-small text-ink-2">Berlaku sejak 21 Oktober 2026.</p>
+  </div>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Siapa pengelolanya</h2>
+    <p>Smart Energy Meter adalah alat pemantau listrik beserta dashboard web (web-remote-nine.vercel.app) dan bot Telegram-nya. Untuk pertanyaan atau permintaan soal data Anda, hubungi <a class="text-accent-ink underline underline-offset-2" href="mailto:yusfikarfirmansamudra933@gmail.com">yusfikarfirmansamudra933@gmail.com</a>.</p>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Data yang dikumpulkan</h2>
+    <ul class="list-disc pl-5 flex flex-col gap-1.5">
+      <li><strong>Akun:</strong> alamat email Anda. Kalau masuk dengan Google, juga nama dan foto profil yang diberikan Google. Kami tidak menerima kata sandi Google Anda.</li>
+      <li><strong>Pembacaan alat:</strong> tegangan, arus, daya, energi (kWh), frekuensi, faktor daya, suhu chip, dan status alat (online, standby, offline).</li>
+      <li><strong>Riwayat:</strong> rata-rata per menit dari pembacaan di atas, disimpan 30 hari, lalu dirangkum per jam. Juga tagihan dan pemakaian kWh per hari, golongan tarif, dan batas daya.</li>
+      <li><strong>Telegram:</strong> kalau Anda memakai bot, nomor chat Telegram yang ditautkan ke alat dan pengingat pembayaran yang Anda atur.</li>
+      <li><strong>Di browser Anda sendiri:</strong> pilihan tema, alat yang terakhir dibuka, dan pilihan grafik. Ini hanya tersimpan di perangkat Anda.</li>
+    </ul>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Untuk apa data dipakai</h2>
+    <p>Hanya untuk menjalankan layanan ini: menampilkan pemakaian listrik dan tagihan, menyimpan riwayat, mengirim notifikasi (misalnya alat offline atau daya melebihi batas), dan memastikan hanya pemilik alat yang bisa mengendalikannya. Data tidak dijual dan tidak dipakai untuk iklan.</p>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Siapa yang bisa melihat</h2>
+    <ul class="list-disc pl-5 flex flex-col gap-1.5">
+      <li>Riwayat panjang (24 jam sampai 30 hari) hanya bisa dibuka oleh akun yang sudah menambahkan alat itu dengan PIN dari labelnya.</li>
+      <li>Pembacaan langsung, status, riwayat 1 jam terakhir, dan tagihan bulanan dikirim lewat broker MQTT yang bisa dibaca siapa pun yang mengetahui ID alat. Jangan bagikan ID alat Anda kalau tidak ingin data ini terlihat orang lain.</li>
+      <li>Mengendalikan alat (mematikan pemantauan, mengubah tarif atau batas daya) selalu butuh PIN atau akun pemilik.</li>
+    </ul>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Di mana data disimpan</h2>
+    <p>Data diproses oleh layanan pihak ketiga berikut, masing-masing hanya untuk bagiannya:</p>
+    <ul class="list-disc pl-5 flex flex-col gap-1.5">
+      <li><strong>Supabase</strong> (server di Singapura): akun, kepemilikan alat, riwayat, dan tagihan harian.</li>
+      <li><strong>EMQX Cloud</strong>: broker MQTT yang meneruskan pembacaan alat.</li>
+      <li><strong>Vercel</strong>: hosting dashboard web dan fungsi server.</li>
+      <li><strong>Telegram</strong>: pengiriman pesan bot, kalau Anda memakainya.</li>
+      <li><strong>Google</strong>: proses masuk, kalau Anda memilih "Masuk dengan Google".</li>
+    </ul>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Menghapus data</h2>
+    <ul class="list-disc pl-5 flex flex-col gap-1.5">
+      <li>Lepas alat dari akun kapan saja lewat tombol <strong>Lepas</strong> di halaman Alat. Akun Anda tidak lagi bisa membuka riwayat alat itu.</li>
+      <li>Lepas tautan Telegram dengan perintah <span class="font-mono">/lepas</span> di bot.</li>
+      <li>Untuk menghapus akun beserta datanya, kirim email ke alamat di atas dari email yang Anda pakai untuk masuk.</li>
+    </ul>
+  </section>
+
+  <section class="flex flex-col gap-2">
+    <h2 class="text-title text-ink">Perubahan</h2>
+    <p>Kalau kebijakan ini berubah, tanggal di atas ikut diperbarui.</p>
+  </section>
+</main>
+</body>
+</html>
