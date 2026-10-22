@@ -74,10 +74,33 @@ Firmware baru punya satu kesempatan untuk membuktikan dirinya bisa konek WiFi se
 
 1. Begitu upload OTA sukses, sebelum restart, perangkat menyimpan tanda "perlu verifikasi" ke NVS (`Preferences`, tahan reboot).
 2. Begitu boot pertama setelah OTA itu, kalau tanda itu ada, firmware baru dikasih waktu 20 detik untuk konek WiFi (OLED menampilkan "Verifying WiFi...").
-3. Kalau berhasil konek dalam 20 detik → tanda dihapus, firmware baru dipercaya, lanjut boot normal (MQTT, web server, dst).
+3. Kalau berhasil konek dalam 20 detik → lanjut boot normal (MQTT, web server, dst). Kalau broker MQTT diatur, firmware baru masih harus tersambung ke broker dalam 5 menit sejak boot; baru setelah itu tanda dihapus dan firmware baru dipercaya. Kalau tidak tersambung, alat juga rollback, karena firmware yang tidak bisa ke broker tidak akan pernah menerima perbaikan lewat cloud.
 4. Kalau gagal (misal firmware baru ada bug yang bikin WiFi tidak pernah konek) → otomatis `Update.rollBack()` ke firmware sebelumnya di partisi OTA yang lain, lalu restart — **tanpa perlu USB atau intervensi manual sama sekali**. OLED menampilkan "Rollback! Restarting...".
 
 Pengecekan ini cuma jalan sekali per OTA (bukan tiap boot), jadi tidak menambah waktu boot untuk restart/power-cycle biasa. Kalau tidak ada firmware valid di partisi satunya untuk di-rollback (misal baru sekali pernah di-flash), perangkat tetap lanjut boot dengan firmware yang ada — tidak ada tempat lain untuk kembali.
+
+### Update firmware dari cloud (mulai 1.17.0)
+
+Alat yang sudah di rumah pelanggan bisa di-update tanpa kabel dan tanpa berada di jaringan WiFi yang sama. Setiap alat membuka `https://web-remote-nine.vercel.app/firmware/latest.json` 2 menit setelah boot lalu tiap 6 jam, dan memasang versi yang lebih baru dari `FIRMWARE_VERSION`-nya (`src/cloudOta.cpp`). Auto-rollback di atas tetap berlaku.
+
+File firmware di folder itu **dienkripsi dan ditandatangani** dengan `OTA_KEY`. Alasannya: `firmware.bin` memuat password WiFi dan MQTT dari `config.local.h`, sedangkan folder itu bisa diunduh siapa saja. Alat menolak file yang tanda tangannya tidak cocok, jadi hanya rilis dari komputer yang memegang kunci yang bisa terpasang. Unduhan memakai HTTPS dengan sertifikat root yang ditanam di `include/otaRoots.h`.
+
+Sekali saja di awal:
+
+```sh
+cd web-remote
+node scripts/release-firmware.js --new-key
+```
+
+Perintah ini membuat `web-remote/ota-key.local.txt` dan menambahkan baris `OTA_KEY` ke `include/config.local.h` (keduanya tidak di-commit dan tidak di-deploy). Build lalu upload firmware ini **sekali** lewat USB atau `/update` ke setiap alat yang sudah ada: alat dengan firmware lama atau kunci lain tidak ikut update dari cloud. Kalau `ota-key.local.txt` hilang, alat-alat itu tidak bisa lagi di-update dari cloud, jadi simpan salinannya di tempat aman.
+
+Setiap rilis:
+
+1. Naikkan `FIRMWARE_VERSION` di `include/config.h`, lalu `pio run`.
+2. `node scripts/release-firmware.js --only sem-c466ec` untuk mencoba di satu alat dulu, atau tanpa `--only` untuk semua alat. Hasilnya `web-remote/firmware/latest.json` dan `fw-<versi>.bin` (tidak di-commit).
+3. `npx vercel deploy --prod`. Alat memasangnya dalam 6 jam, atau langsung lewat tombol **Cek update sekarang** di halaman admin.
+
+Selama mengunduh (sekitar setengah menit), OLED menampilkan progres dan pembacaan PZEM berhenti sebentar. Kalau versi yang sama pernah gagal lalu rollback, alat tidak mencobanya lagi sendiri sampai ada versi yang lebih baru atau tombol **Cek update sekarang** ditekan. Firmware sekarang memakai 86% partisi aplikasi; rilis yang melewati 100% tidak bisa dipasang lewat OTA.
 
 ## Menyiapkan broker MQTT (EMQX Cloud)
 
@@ -103,6 +126,9 @@ Setiap alat punya ID sendiri: `sem-` + 6 karakter terakhir MAC chip-nya (mis. `s
 | `smartmeter/<id>/cmd/limit` | → ESP32 | Publish angka baru untuk ubah batas daya |
 | `smartmeter/<id>/cmd/power` | `api/power.js` → ESP32 | `"off"` = standby (PZEM tidak dibaca, OLED menampilkan STANDBY, data tidak dikirim), `"on"` = normal lagi. Tidak retained; setiap boot perangkat selalu mulai dalam mode normal |
 | `smartmeter/<id>/cmd/restart` | → ESP32 | Publish apa saja untuk restart perangkat |
+| `smartmeter/<id>/cmd/update` | `api/admin.js` → ESP32 | Publish apa saja: alat langsung memeriksa `latest.json`. Yang dipasang tetap ditentukan rilis bertanda tangan di server, bukan isi pesan ini |
+| `smartmeter/<id>/info` | ESP32 → `api/admin.js` | JSON `{ "fw": "1.17.0", "ip": "...", "rssi": -61, "heap": ... }`, dikirim setiap tersambung ke broker, retained |
+| `smartmeter/<id>/ota` | ESP32 → `api/admin.js` | JSON `{ "state": "current" / "downloading" / "updated" / "failed", "version": "...", "error": "..." }`, hasil pemeriksaan update terakhir, retained |
 | `smartmeter/<id>/cmd/reset` | → ESP32 | Publish apa saja untuk factory reset |
 | `smartmeter/<id>/control/lockout` | `api/power.js`, bot | Penghitung PIN salah alat ini (5 kali salah = terkunci 15 menit), retained |
 | `smartmeter/<id>/telegram/alert_state` | `api/monitor.js` | State notifikasi (sudah/belum alert offline/overload/standby), retained |
@@ -141,6 +167,10 @@ Hanya server (kunci secret) yang menulis; browser memakai kunci publishable dan 
 
 Email link masuk memakai SMTP bawaan Supabase, yang dibatasi beberapa email per jam. Cukup untuk sedikit pemilik; untuk banyak pengguna pasang SMTP sendiri.
 
+### Halaman admin
+
+`admin.html` untuk penjual: semua alat yang pernah terhubung (dari tabel `devices` dan broker), status, versi firmware, hasil update terakhir, pemilik (email dan nama alat), terakhir online, sinyal WiFi, serta tombol **Cek update sekarang**, **Restart**, dan **Minta semua alat online cek update**. Datanya dari `api/admin.js`, yang hanya menjawab akun yang emailnya ada di environment variable Vercel `ADMIN_EMAILS` (pisahkan dengan koma). Akun admin melihat tautan **Halaman admin** di bawah halaman Alat.
+
 ## Menyiapkan dashboard cloud & bot Telegram (`web-remote/`)
 
 1. `cd web-remote && npm install`
@@ -150,6 +180,7 @@ Email link masuk memakai SMTP bawaan Supabase, yang dibatasi beberapa email per 
    - `BOT_MQTT_USERNAME`, `BOT_MQTT_PASSWORD` — kredensial `smartenergymeterbot`
    - `TELEGRAM_BOT_TOKEN` — token dari [@BotFather](https://t.me/BotFather)
    - `CONTROL_SECRET`: kunci rahasia untuk membuat PIN tiap alat (lihat "Menambah alat baru" di bawah). Tanpa variabel ini, tombol Pemantauan di dashboard dan `/hubungkan` di bot menolak semua permintaan
+   - `ADMIN_EMAILS`: email akun yang boleh membuka halaman admin, dipisahkan koma
 4. Daftarkan webhook bot: `curl "https://api.telegram.org/bot<TOKEN>/setWebhook?url=https://<domain-vercel>/api/telegram"`
 5. Daftarkan daftar command bot (untuk autocomplete `/` di Telegram) lewat `setMyCommands` — lihat daftar command di bawah.
 6. `GET /api/monitor` harus dipanggil secara berkala — endpoint ini bukan cuma untuk notifikasi (offline/overload), tapi juga **satu-satunya tempat** yang menghitung & menyimpan histori tagihan harian/mingguan (`smartmeter/billing/*`), mengirim ringkasan Telegram (21:00 WIB harian, Minggu 21:00 WIB mingguan), dan mengecek pengingat bayar listrik custom (`/reminder`, jam 08:00 WIB). Kalau endpoint ini tidak pernah dipanggil, histori tagihan tidak akan pernah ter-update dan pengingat custom tidak akan pernah terkirim. **Akun Vercel Hobby/gratis membatasi cron bawaan cuma 1x/hari**, jadi gunakan layanan cron gratis pihak ketiga seperti [cron-job.org](https://cron-job.org) untuk memanggil endpoint ini tiap beberapa menit.
@@ -198,6 +229,7 @@ Pemilik alat mengganti golongan dari kartu **Golongan tarif PLN** di halaman Tag
 - Kredensial MQTT di dashboard cloud (`smartenergymeterweb`) **sengaja read-only** karena kodenya publik dan terlihat siapa saja lewat "View Source" — jangan pernah pakai kredensial full-access di sana.
 - Kredensial bot (`smartenergymeterbot`, `TELEGRAM_BOT_TOKEN`, `CONTROL_SECRET`) hanya hidup sebagai environment variable server-side di Vercel, tidak pernah masuk ke kode yang di-deploy ke browser.
 - **Vercel CLI tidak membaca `.gitignore`.** File apa pun di `web-remote/` yang tidak tercantum di `web-remote/.vercelignore` ikut ter-upload dan bisa diunduh publik. Simpan catatan kredensial lokal dengan akhiran `.local.txt` (sudah dikecualikan), atau di luar folder `web-remote/`.
+- `web-remote/ota-key.local.txt` (sama dengan `OTA_KEY` di `config.local.h`) adalah satu-satunya hal yang membuat alat mau memasang firmware dari cloud. Siapa pun yang memegangnya, dan bisa deploy ke project Vercel ini, bisa memasang firmware apa saja ke semua alat.
 - Semua alat berbagi satu password MQTT firmware. Orang yang membongkar satu alat bisa mengambil password itu lalu menyamar sebagai alat lain (memilih client ID lain). Untuk produk yang dijual luas, beri tiap alat username sendiri (EMQX bisa impor daftar user dari CSV) dan ganti aturan ACL-nya ke `smartmeter/${username}/#`.
 - Dashboard lokal (`data/`) saat ini **belum** punya autentikasi HTTP aktif di sebagian besar endpoint (`/restart`, `/factoryReset`, `/setLimit`) meski field `WEB_USERNAME`/`WEB_PASSWORD` sudah ada di config — siapa pun di jaringan WiFi yang sama bisa akses. Pengecualiannya `/update` (OTA firmware): endpoint ini **menegakkan** HTTP Basic Auth begitu `WEB_USERNAME`/`WEB_PASSWORD` diisi, karena flash firmware sembarangan jauh lebih berbahaya daripada restart/reset.
 

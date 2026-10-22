@@ -192,6 +192,21 @@ function connectMQTT() {
 
 // --- Akun ---
 
+// Tautan admin hanya untuk akun di ADMIN_EMAILS. Dicek sekali per akun.
+let adminCheckedFor;
+async function checkAdmin() {
+  const user = Account.session ? Account.session.user.id : null;
+  if (user === adminCheckedFor) return;
+  adminCheckedFor = user;
+  $("admin-link").hidden = true;
+  if (!user) return;
+  try {
+    const res = await fetch("api/admin?probe=1", { headers: Account.authHeader() });
+    const body = await res.json();
+    if (adminCheckedFor === user) $("admin-link").hidden = !body.admin;
+  } catch { /* tanpa tautan: halaman admin tetap bisa dibuka langsung */ }
+}
+
 function renderAccount() {
   const signedIn = !!Account.session;
   $("account-loading").hidden = true;
@@ -199,6 +214,7 @@ function renderAccount() {
   $("signed-in").hidden = !signedIn;
   $("device-section").hidden = !signedIn;
   $("add-section").hidden = !signedIn;
+  checkAdmin();
   if (signedIn) {
     $("account-email").textContent = Account.email || "-";
     renderList();

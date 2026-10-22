@@ -8,6 +8,7 @@
 #include <ArduinoJson.h>
 
 #include "billing.h"
+#include "cloudOta.h"
 #include "config.h"
 #include "deviceId.h"
 #include "globals.h"
@@ -38,6 +39,8 @@ String TOPIC_RESTART;
 String TOPIC_RESET;
 String TOPIC_POWER;
 String TOPIC_TARIFF;
+String TOPIC_UPDATE;
+String TOPIC_INFO;
 const unsigned long PUBLISH_INTERVAL_MS = 1000;
 unsigned long lastPublish = 0;
 
@@ -53,6 +56,21 @@ const char* currentStatus()
 void publishStatus()
 {
     mqtt.publish(TOPIC_STATUS.c_str(), currentStatus(), true);
+}
+
+// Which build this unit runs and how it is connected, for the admin page.
+// Sent once per connect: none of it changes while connected.
+void publishInfo()
+{
+    StaticJsonDocument<192> doc;
+    doc["fw"] = FIRMWARE_VERSION;
+    doc["ip"] = WiFi.localIP().toString();
+    doc["rssi"] = WiFi.RSSI();
+    doc["heap"] = ESP.getFreeHeap();
+
+    String json;
+    serializeJson(doc, json);
+    mqtt.publish(TOPIC_INFO.c_str(), json.c_str(), true);
 }
 
 //==========================================================
@@ -124,8 +142,16 @@ void callback(char* topic, byte* payload, unsigned int length)
     }
 
     //======================================================
-    // STANDBY / ON
+    // UPDATE FIRMWARE DARI CLOUD
     //======================================================
+
+    // Only asks for a check: what gets installed is decided by the signed
+    // release on the server, never by this message.
+    else if (TOPIC_UPDATE == topic)
+    {
+        Serial.println("===== MQTT CEK UPDATE =====");
+        cloudOtaRequestCheck();
+    }
 
     //======================================================
     // TARIF LISTRIK
@@ -191,6 +217,8 @@ void mqttBegin()
     TOPIC_RESET   = deviceTopic("cmd/reset");
     TOPIC_POWER   = deviceTopic("cmd/power");
     TOPIC_TARIFF  = deviceTopic("billing/tariff");
+    TOPIC_UPDATE  = deviceTopic("cmd/update");
+    TOPIC_INFO    = deviceTopic("info");
 
     Serial.printf("ID perangkat : %s\n", deviceId());
 
@@ -234,6 +262,8 @@ void mqttReconnect()
                       TOPIC_STATUS.c_str(), 1, true, "offline"))
     {
         publishStatus();
+        publishInfo();
+        mqtt.subscribe(TOPIC_UPDATE.c_str());
         mqtt.subscribe(TOPIC_LIMIT.c_str());
         mqtt.subscribe(TOPIC_RESTART.c_str());
         mqtt.subscribe(TOPIC_RESET.c_str());
@@ -260,6 +290,17 @@ void mqttLoop()
 //==========================================================
 // MQTT PUBLISH
 //==========================================================
+
+bool mqttConnected()
+{
+    return mqtt.connected();
+}
+
+void mqttSuspend()
+{
+    mqtt.disconnect();
+    espClient.stop();
+}
 
 bool mqttPublishRetained(const char *topic, const String &payload)
 {

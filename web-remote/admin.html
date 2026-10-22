@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="id" data-theme="light">
+<head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0, viewport-fit=cover" name="viewport"/>
+<title>Admin Alat</title>
+<meta content="noindex" name="robots"/>
+<script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")==="dark"?"dark":"light"}catch(e){}</script>
+<link href="manifest.json" rel="manifest"/>
+<link href="icon-192.png?v=2" rel="icon"/>
+<meta content="#059669" id="meta-theme-color" name="theme-color"/>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<link href="theme.css" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com"></script>
+<script src="theme.js"></script>
+</head>
+<body class="bg-surface font-sans text-body text-ink min-h-screen selection:bg-accent selection:text-on-btn">
+
+<header class="fixed top-0 w-full z-50 pt-safe bg-card border-b border-line">
+  <div class="h-16 px-4 max-w-3xl mx-auto flex items-center justify-between gap-2">
+    <a class="min-h-[44px] inline-flex items-center gap-1.5 text-ink font-semibold hover:text-accent-ink" href="devices.html">
+      <span aria-hidden="true" class="material-symbols-outlined text-[20px]">arrow_back</span>
+      <span>Alat saya</span>
+    </a>
+    <div class="flex items-center gap-1">
+      <button class="min-h-[44px] px-3 rounded-lg text-ink hover:bg-inset font-semibold transition-colors disabled:opacity-50" hidden id="btn-refresh" type="button">Muat ulang</button>
+      <button aria-label="Ganti ke tema gelap" aria-pressed="false" class="shrink-0 w-11 h-11 rounded-lg flex items-center justify-center text-ink-2 hover:text-ink hover:bg-inset transition-colors" id="btn-theme" type="button">
+        <span aria-hidden="true" class="material-symbols-outlined text-[22px]" id="btn-theme-icon">dark_mode</span>
+      </button>
+    </div>
+  </div>
+</header>
+
+<!-- Halaman kerja penjual: satu kolom, kartu rilis firmware di atas sebagai titik fokus, lalu daftar semua alat. -->
+<main class="pt-16 pb-10 px-4 max-w-3xl mx-auto flex flex-col gap-4">
+  <div class="flex flex-col gap-1 pt-4">
+    <span class="font-mono text-label uppercase text-ink-2">Smart Energy Meter</span>
+    <h1 class="text-headline text-ink">Admin</h1>
+    <p class="text-small text-ink-2">Semua alat yang pernah terhubung, versi firmware, dan pemiliknya.</p>
+  </div>
+
+  <p class="text-small text-ink-2" id="state-loading" role="status">Memuat data alat...</p>
+
+  <section class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" hidden id="state-blocked">
+    <h2 class="text-title text-ink" id="blocked-title">Masuk dulu</h2>
+    <p class="text-small text-ink-2" id="blocked-text">Halaman ini hanya untuk akun admin.</p>
+    <a class="self-start min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity inline-flex items-center" href="devices.html" id="blocked-link">Masuk di halaman Alat</a>
+  </section>
+
+  <section class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" hidden id="state-error">
+    <p class="text-small text-bad-ink" id="error-text">Gagal memuat data.</p>
+    <button class="self-start min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors" id="btn-retry" type="button">Coba lagi</button>
+  </section>
+
+  <div class="flex flex-col gap-4" hidden id="content">
+    <section aria-labelledby="h-rilis" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-4">
+      <div class="flex flex-col gap-1">
+        <span class="font-mono text-label uppercase text-ink-2">Update dari cloud</span>
+        <h2 class="text-title text-ink" id="h-rilis">Firmware terbaru</h2>
+      </div>
+      <div class="flex items-end justify-between gap-3 flex-wrap">
+        <span class="font-mono text-headline text-ink num" id="latest-version">-</span>
+        <span class="text-small text-ink-2" id="latest-meta"></span>
+      </div>
+      <p class="text-small text-ink-2" id="latest-progress"></p>
+      <button class="w-full min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity disabled:opacity-50" id="btn-update-all" type="button">Minta semua alat online cek update</button>
+      <p aria-live="polite" class="text-small" hidden id="update-all-msg" role="status"></p>
+    </section>
+
+    <div aria-label="Ringkasan status" class="grid grid-cols-3 gap-2" id="summary"></div>
+
+    <section aria-labelledby="h-alat" class="flex flex-col gap-2">
+      <h2 class="font-mono text-label uppercase text-ink-2" id="h-alat">Semua alat</h2>
+      <div class="flex flex-col gap-2" id="device-list"></div>
+      <p class="rounded-xl bg-card border border-line p-5 text-center text-small text-ink-2" hidden id="device-empty">Belum ada alat yang pernah terhubung ke broker.</p>
+    </section>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.118.0/dist/umd/supabase.min.js"></script>
+<script src="auth.js"></script>
+<script src="admin.js"></script>
+</body>
+</html>

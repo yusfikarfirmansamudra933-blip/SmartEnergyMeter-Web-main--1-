@@ -109,7 +109,11 @@
 
     <p class="rounded-xl bg-card border border-line p-5 text-small text-bad-ink" hidden id="account-unavailable">Layanan akun tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.</p>
 
-    <a class="self-start min-h-[44px] inline-flex items-center text-small text-ink-2 underline underline-offset-2 hover:text-ink" href="privacy.html">Kebijakan privasi</a>
+    <div class="flex flex-wrap gap-x-5">
+      <a class="min-h-[44px] inline-flex items-center text-small text-ink-2 underline underline-offset-2 hover:text-ink" href="privacy.html">Kebijakan privasi</a>
+      <!-- Hanya muncul untuk akun di ADMIN_EMAILS (dicek di api/admin). -->
+      <a class="min-h-[44px] inline-flex items-center text-small text-ink-2 underline underline-offset-2 hover:text-ink" hidden href="admin.html" id="admin-link">Halaman admin</a>
+    </div>
 
   </div>
 </main>

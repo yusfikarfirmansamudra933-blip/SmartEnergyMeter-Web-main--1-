@@ -12,7 +12,18 @@
 
 // Bumped manually on each release so /api/status and the OTA panel can show
 // which build is currently running (useful to confirm an update took effect).
-#define FIRMWARE_VERSION "1.16.0"
+#define FIRMWARE_VERSION "1.17.0"
+
+// Update dari cloud (src/cloudOta.cpp): latest.json dan file firmware
+// terenkripsi diambil dari folder ini, yang diisi web-remote/scripts/release-firmware.js.
+#define OTA_BASE_URL "https://web-remote-nine.vercel.app/firmware/"
+
+// Kunci enkripsi dan tanda tangan firmware, ditulis ke config.local.h oleh
+// "node scripts/release-firmware.js --new-key". Kosong = update dari cloud
+// mati; update lewat jaringan lokal (/update) tetap jalan.
+#ifndef OTA_KEY
+#define OTA_KEY ""
+#endif
 
 // Tarif awal (Rp per kWh, R-1 1.300 VA) untuk halaman Tagihan di OLED, dipakai
 // sampai golongan alat diatur dari dashboard atau bot (smartmeter/<id>/billing/tariff).

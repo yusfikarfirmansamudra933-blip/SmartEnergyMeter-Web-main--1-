@@ -15,6 +15,7 @@
 #include "wifiProvision.h"
 #include "webServer.h"
 #include "mqtt.h"
+#include "cloudOta.h"
 
 namespace {
 // A firmware that just came in over OTA gets one chance to prove it can
@@ -106,18 +107,23 @@ void verifyOtaOrRollBack()
         delay(250);
     }
 
-    // Cleared either way: a successful connect means this firmware is
-    // trusted from now on, and a failed one is about to either roll back
-    // (a different partition, which never set this flag) or — if there's
-    // nothing to roll back to — just keep booting as-is, in which case
-    // re-checking on every future boot would only add a needless delay.
-    clearOtaPendingVerify();
-
     if (WiFi.status() == WL_CONNECTED)
     {
-        Serial.println("OTA verified: WiFi connected.");
+        // With a broker configured the flag stays set: cloudOtaLoop() clears
+        // it once MQTT connects, or rolls back if it never does, since a
+        // build that cannot reach the broker can't receive a fix either.
+        if (strlen(MQTT_HOST) == 0 || strlen(MQTT_USERNAME) == 0 || strlen(MQTT_PASSWORD) == 0)
+        {
+            clearOtaPendingVerify();
+        }
+        Serial.println("OTA: WiFi connected.");
         return;
     }
+
+    // Cleared before either outcome: rolling back boots a different
+    // partition, which never set this flag, and with nothing to roll back
+    // to, re-checking on every future boot would only add a needless delay.
+    clearOtaPendingVerify();
 
     Serial.println("OTA verify FAILED: WiFi did not connect.");
 
@@ -164,6 +170,7 @@ void setup()
     verifyOtaOrRollBack();
 
     mqttBegin();
+    cloudOtaBegin();
     webServerBegin();
     billingBegin();
 
@@ -227,6 +234,7 @@ void loop()
 
     wifiLoop();
     mqttLoop();
+    cloudOtaLoop();
 
     webServerLoop();
 

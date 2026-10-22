@@ -24,3 +24,7 @@
 
 #define WEB_USERNAME "admin"
 #define WEB_PASSWORD "replace-with-a-strong-password"
+
+// Update dari cloud. Jangan diisi tangan: jalankan dari folder web-remote
+//   node scripts/release-firmware.js --new-key
+// yang menambahkan baris OTA_KEY ke config.local.h.

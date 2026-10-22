@@ -40,9 +40,18 @@ async function userFromRequest(req) {
   return user && user.id ? user : null;
 }
 
+// Every account's id and email (the Auth admin API, secret key only). One page
+// of 1000 is plenty for the number of units sold by hand.
+async function listUsers() {
+  const res = await fetch(`${SUPABASE_URL}/auth/v1/admin/users?per_page=1000`, { headers: headers() });
+  if (!res.ok) throw new Error(`Supabase auth users: ${res.status} ${await res.text()}`);
+  const body = await res.json().catch(() => null);
+  return (body && body.users) || [];
+}
+
 async function isOwner(userId, deviceId) {
   const rows = await rest(`device_owners?select=device_id&device_id=eq.${encodeURIComponent(deviceId)}&user_id=eq.${encodeURIComponent(userId)}`);
   return Array.isArray(rows) && rows.length > 0;
 }
 
-module.exports = { SUPABASE_URL, enabled, rest, upsert, userFromRequest, isOwner };
+module.exports = { SUPABASE_URL, enabled, rest, upsert, userFromRequest, listUsers, isOwner };

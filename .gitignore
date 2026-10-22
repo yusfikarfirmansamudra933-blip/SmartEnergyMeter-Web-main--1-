@@ -10,3 +10,4 @@ web-remote/.vercel
 .vscode/launch.json
 .vscode/ipch
 web-remote/*.local.*
+web-remote/firmware/
