@@ -6,6 +6,7 @@
 #include <cstring>
 #include <PubSubClient.h>
 #include <ArduinoJson.h>
+#include <esp_ota_ops.h>
 
 #include "billing.h"
 #include "cloudOta.h"
@@ -67,6 +68,10 @@ void publishInfo()
     doc["ip"] = WiFi.localIP().toString();
     doc["rssi"] = WiFi.RSSI();
     doc["heap"] = ESP.getFreeHeap();
+    // Bytes a cloud update may use here: units flashed before partitions.csv
+    // still have the old 1.25 MB slots until they get one USB flash.
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    doc["appSize"] = running ? running->size : 0;
 
     String json;
     serializeJson(doc, json);

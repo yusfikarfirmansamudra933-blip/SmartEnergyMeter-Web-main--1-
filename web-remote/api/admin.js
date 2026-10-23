@@ -76,6 +76,7 @@ async function overview(req, res) {
       firmware: info.fw || null,
       ip: info.ip || null,
       rssi: Number.isFinite(info.rssi) ? info.rssi : null,
+      appSize: Number.isFinite(info.appSize) ? info.appSize : null,
       ota: safeParse(l.ota, null),
       power: l.status === "online" && Number.isFinite(data.power) ? data.power : null,
       firstSeen: row.first_seen || null,

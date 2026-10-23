@@ -76,6 +76,13 @@ const bin = fs.readFileSync(BUILD);
 // Guards against releasing a stale build under a new version number.
 if (!bin.includes(Buffer.from(`${version}\0`))) fail(`firmware.bin bukan versi ${version}. Jalankan pio run lagi setelah mengubah FIRMWARE_VERSION.`);
 
+// App slot sizes: partitions.csv now, and the esp32dev default that units
+// flashed before it still have (OTA cannot change the table).
+const SLOT_NEW = 0x1c0000;
+const SLOT_OLD = 0x140000;
+if (bin.length > SLOT_NEW) fail(`firmware.bin (${bin.length} byte) lebih besar dari slot aplikasi (${SLOT_NEW} byte).`);
+if (bin.length > SLOT_OLD) console.warn(`Perhatian: firmware ini ${(bin.length / 1048576).toFixed(2)} MB. Alat yang belum di-flash ulang lewat USB sejak partitions.csv (slot 1,25 MB) akan gagal memasangnya; lihat kolom Ruang di halaman admin.`);
+
 const derive = (label) => crypto.createHmac("sha256", key).update(label).digest();
 const iv = crypto.randomBytes(16);
 const cipher = crypto.createCipheriv("aes-256-ctr", derive("sem-ota-enc"), iv);

@@ -100,7 +100,9 @@ Setiap rilis:
 2. `node scripts/release-firmware.js --only sem-c466ec` untuk mencoba di satu alat dulu, atau tanpa `--only` untuk semua alat. Hasilnya `web-remote/firmware/latest.json` dan `fw-<versi>.bin` (tidak di-commit).
 3. `npx vercel deploy --prod`. Alat memasangnya dalam 6 jam, atau langsung lewat tombol **Cek update sekarang** di halaman admin.
 
-Selama mengunduh (sekitar setengah menit), OLED menampilkan progres dan pembacaan PZEM berhenti sebentar. Kalau versi yang sama pernah gagal lalu rollback, alat tidak mencobanya lagi sendiri sampai ada versi yang lebih baru atau tombol **Cek update sekarang** ditekan. Firmware sekarang memakai 86% partisi aplikasi; rilis yang melewati 100% tidak bisa dipasang lewat OTA.
+Selama mengunduh (sekitar setengah menit), OLED menampilkan progres dan pembacaan PZEM berhenti sebentar. Kalau versi yang sama pernah gagal lalu rollback, alat tidak mencobanya lagi sendiri sampai ada versi yang lebih baru atau tombol **Cek update sekarang** ditekan. 
+
+**Partisi (mulai 1.17.1).** `partitions.csv` memberi tiap slot aplikasi 1,75 MB (default esp32dev 1,25 MB) dan 384 KB untuk file dashboard lokal (`data/`, sekitar 90 KB). NVS tidak berpindah, jadi WiFi, batas daya, dan tarif tetap tersimpan. Tabel partisi **hanya bisa diganti lewat USB**, tidak lewat OTA: alat yang terakhir di-flash USB sebelum 1.17.1 tetap punya slot 1,25 MB sampai di-flash sekali lagi dengan `scripts/new-unit.js`. Baris **Ruang firmware** di halaman admin menunjukkan ukuran slot tiap alat, dan `release-firmware.js` memperingatkan kalau firmware lebih besar dari 1,25 MB.
 
 ## Menyiapkan broker MQTT (EMQX Cloud)
 
@@ -187,9 +189,18 @@ Email link masuk memakai SMTP bawaan Supabase, yang dibatasi beberapa email per 
 
 ### Menambah alat baru
 
-Tidak ada yang perlu diatur di EMQX, Vercel, atau kode:
+Tidak ada yang perlu diatur di EMQX, Vercel, atau kode. Cara tercepat, dengan unit dicolok USB:
 
-1. Flash `firmware.bin` yang sama (lewat USB untuk alat baru, atau OTA).
+```sh
+cd web-remote
+node scripts/new-unit.js --bot <username_bot_telegram>
+```
+
+Script ini membaca ID dari MAC chip, mem-flash firmware dan file dashboard lokal (`data/`), mencatat unit di `web-remote/units.local.json`, lalu membuat `labels.local.html` untuk semua unit yang disiapkan hari ini (`--all` untuk semua unit). Kalau ada lebih dari satu port, tambahkan `--port COM9`. Script berhenti sebelum menyentuh chip kalau `OTA_KEY` atau `CONTROL_SECRET` belum dibuat, supaya tidak ada unit yang terjual tanpa update dari cloud atau tanpa PIN. Setelah itu nyalakan unit, setup WiFi-nya (lihat "Setup WiFi pertama kali"), dan tempel labelnya.
+
+Langkah manualnya, kalau tidak memakai script:
+
+1. Flash `firmware.bin` yang sama lewat USB (`pio run -t upload`, lalu `pio run -t uploadfs` untuk file dashboard lokal).
 2. Nyalakan alat, setup WiFi-nya (lihat "Setup WiFi pertama kali"). Catat ID yang tampil di OLED.
 3. Buat label berisi ID, PIN, dan QR code. Sekali saja di awal, buat kuncinya lalu masukkan isinya ke Vercel sebagai `CONTROL_SECRET`:
 

@@ -4,3 +4,4 @@
 *.local.html
 # Run locally only (makes labels from CONTROL_SECRET), no reason to serve it.
 scripts
+*.local.json

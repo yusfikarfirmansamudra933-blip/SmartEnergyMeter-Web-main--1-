@@ -39,6 +39,15 @@ function timeAgo(iso) {
   return new Date(iso).toLocaleDateString("id-ID", { day: "numeric", month: "short", year: "numeric" });
 }
 
+// Slot aplikasi partitions.csv. Alat yang terakhir di-flash USB sebelum itu
+// masih punya slot 1,25 MB sampai di-flash USB sekali lagi.
+const BIG_SLOT = 0x1c0000;
+
+function appSizeText(bytes) {
+  const mb = (bytes / 1048576).toLocaleString("id-ID", { maximumFractionDigits: 2 });
+  return bytes < BIG_SLOT ? `${mb} MB, flash ulang lewat USB sekali` : `${mb} MB`;
+}
+
 function otaText(d) {
   const o = d.ota;
   if (!o || !o.state) return d.firmware ? "Belum pernah cek update" : "Firmware lama, belum mendukung update dari cloud";
@@ -128,6 +137,7 @@ function deviceCard(d) {
     <div class="bg-inset rounded-lg px-3 py-1 flex flex-col divide-y divide-line">
       ${row("Firmware", `<span class="font-mono">${esc(d.firmware || "1.16.0 atau lebih lama")}</span>${stale ? ' <span class="font-semibold" style="color:var(--warn-ink)">perlu update</span>' : ""}`)}
       ${row("Update", esc(otaText(d)), failed ? "text-bad-ink" : "")}
+      ${d.appSize ? row("Ruang firmware", appSizeText(d.appSize), d.appSize < BIG_SLOT ? "text-warn-ink" : "") : ""}
       ${row("Pemilik", owners)}
       ${row("Terakhir online", connected ? "sekarang" : esc(timeAgo(d.lastSeen)))}
       ${d.status === "online" && d.power != null ? row("Daya", `<span class="font-mono num">${Math.round(d.power)} W</span>`) : ""}
