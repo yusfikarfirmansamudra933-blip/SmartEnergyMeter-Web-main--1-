@@ -8,7 +8,7 @@
 // lama begitu ada versi baru, ini satu-satunya cara device yang sudah
 // menginstal PWA menerima pembaruan. Nama yang sama = cache lama dipakai
 // selamanya walau file di server sudah diganti.
-const CACHE_NAME = "SmartEnergyMeterCloud-v12";
+const CACHE_NAME = "SmartEnergyMeterCloud-v13";
 
 const urls = [
     "./",
@@ -75,6 +75,41 @@ self.addEventListener("fetch", event => {
         caches.match(event.request, { ignoreSearch: true })
             .then(response => response || fetch(event.request))
 
+    );
+
+});
+
+// Notifikasi admin (lib/push.js mengirim, admin.js mendaftarkan). Data
+// notifikasi: { title, body, tag, url }. Tag sama menggantikan notifikasi
+// lama alat itu, jadi "offline" lalu "online lagi" tidak menumpuk.
+self.addEventListener("push", event => {
+
+    let data = {};
+    try { data = event.data ? event.data.json() : {}; } catch (e) { data = { title: event.data && event.data.text() }; }
+
+    event.waitUntil(
+        self.registration.showNotification(data.title || "Smart Energy Meter", {
+            body: data.body || "",
+            tag: data.tag,
+            icon: "admin-icon-192.png",
+            badge: "admin-icon-192.png",
+            data: { url: data.url || "admin.html" }
+        })
+    );
+
+});
+
+// Ketuk notifikasi: pakai jendela admin yang sudah terbuka kalau ada.
+self.addEventListener("notificationclick", event => {
+
+    event.notification.close();
+    const target = new URL((event.notification.data && event.notification.data.url) || "admin.html", self.registration.scope).href;
+
+    event.waitUntil(
+        self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(list => {
+            const open = list.find(c => c.url.split("#")[0].split("?")[0] === target);
+            return open ? open.focus() : self.clients.openWindow(target);
+        })
     );
 
 });

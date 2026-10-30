@@ -6,8 +6,10 @@
 <title>Admin Alat</title>
 <meta content="noindex" name="robots"/>
 <script>try{document.documentElement.dataset.theme=localStorage.getItem("theme")==="dark"?"dark":"light"}catch(e){}</script>
-<link href="manifest.json" rel="manifest"/>
-<link href="icon-192.png?v=2" rel="icon"/>
+<!-- Manifest sendiri: dipasang sebagai aplikasi "SEM Admin" (APK di admin-app/), terpisah dari aplikasi pelanggan. -->
+<link href="admin.webmanifest" rel="manifest"/>
+<link href="admin-icon-192.png" rel="icon"/>
+<link href="admin-icon-192.png" rel="apple-touch-icon"/>
 <meta content="#059669" id="meta-theme-color" name="theme-color"/>
 <link href="https://fonts.googleapis.com" rel="preconnect"/>
 <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
@@ -68,6 +70,22 @@
       <p class="text-small text-ink-2" id="latest-progress"></p>
       <button class="w-full min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity disabled:opacity-50" id="btn-update-all" type="button">Minta semua alat online cek update</button>
       <p aria-live="polite" class="text-small" hidden id="update-all-msg" role="status"></p>
+    </section>
+
+    <!-- Per perangkat: langganan push tersimpan di HP/browser ini saja, jadi statusnya dicek di sini, bukan di server. -->
+    <section aria-labelledby="h-notif" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3">
+      <div class="flex flex-col gap-1">
+        <span class="font-mono text-label uppercase text-ink-2">Perangkat ini</span>
+        <h2 class="text-title text-ink" id="h-notif">Notifikasi</h2>
+        <p class="text-small text-ink-2">Kabar saat unit offline lebih dari 1 hari, online lagi, atau gagal update.</p>
+      </div>
+      <p class="text-small text-ink-2" id="notif-status" role="status">Memeriksa...</p>
+      <div class="flex flex-wrap gap-2">
+        <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-btn text-on-btn hover:opacity-90 font-semibold transition-opacity disabled:opacity-50" hidden id="btn-notif-on" type="button">Aktifkan notifikasi</button>
+        <button class="flex-1 min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors disabled:opacity-50" hidden id="btn-notif-test" type="button">Kirim notifikasi uji</button>
+        <button class="min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors disabled:opacity-50" hidden id="btn-notif-off" type="button">Matikan</button>
+      </div>
+      <p aria-live="polite" class="text-small" hidden id="notif-msg" role="status"></p>
     </section>
 
     <div aria-label="Ringkasan status" class="grid grid-cols-3 gap-2" id="summary"></div>

@@ -1,5 +1,6 @@
 const { normalizeDeviceId, topic, safeParse, collectRetained, publishOn, publishAndWait } = require("../lib/devices");
 const db = require("../lib/supabase");
+const push = require("../lib/push");
 
 // Data for admin.html: every unit ever seen (Supabase plus whatever the broker
 // holds), its owners, firmware and update state, and the commands only the
@@ -7,20 +8,19 @@ const db = require("../lib/supabase");
 // separated) in Vercel.
 //
 //   GET  ?probe=1                        -> { admin }   (devices.html shows the link)
-//   GET                                  -> { latest, devices: [...] }
+//   GET                                  -> { latest, devices: [...], vapidPublicKey }
 //   POST { action: "update", device }    -> asks one unit to check for an update now
 //   POST { action: "update-all" }        -> same, for every unit that is connected
 //   POST { action: "restart", device }
+//   POST { action: "push-subscribe", subscription }    -> this phone gets admin notifications
+//   POST { action: "push-unsubscribe", endpoint }
+//   POST { action: "push-test" }         -> one notification to the caller's own phones
 
 const LIVE_TOPICS = ["status", "info", "ota", "data"];
 
-function admins() {
-  return (process.env.ADMIN_EMAILS || "").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
-}
-
 async function adminUser(req) {
   const user = await db.userFromRequest(req);
-  return user && user.email && admins().includes(user.email.toLowerCase()) ? user : null;
+  return user && push.isAdminEmail(user.email) ? user : null;
 }
 
 function readBody(req) {
@@ -85,11 +85,35 @@ async function overview(req, res) {
     };
   });
 
-  res.status(200).json({ latest, devices: list });
+  res.status(200).json({ latest, devices: list, vapidPublicKey: push.pushEnabled() ? push.vapidPublicKey() : null });
 }
 
-async function command(req, res) {
-  const { action, device } = readBody(req);
+async function pushCommand(user, body, res) {
+  if (!push.pushEnabled()) {
+    res.status(503).json({ error: "Notifikasi belum diaktifkan di server (kunci VAPID belum diatur di Vercel)." });
+    return;
+  }
+  if (body.action === "push-subscribe") {
+    const ok = await push.saveSubscription(user.id, body.subscription);
+    res.status(ok ? 200 : 400).json(ok ? { ok: true } : { error: "Data langganan notifikasi tidak valid." });
+  } else if (body.action === "push-unsubscribe") {
+    if (typeof body.endpoint === "string") await push.removeSubscription(user.id, body.endpoint);
+    res.status(200).json({ ok: true });
+  } else if (body.action !== "push-test") {
+    res.status(400).json({ error: "Perintah tidak dikenal." });
+  } else {
+    const sent = await push.sendToAdmins({ title: "Notifikasi uji", body: "Notifikasi admin Smart Energy Meter sudah aktif di perangkat ini.", tag: "test" }, { userId: user.id });
+    res.status(200).json({ ok: true, sent });
+  }
+}
+
+async function command(req, res, user) {
+  const body = readBody(req);
+  const { action, device } = body;
+  if (typeof action === "string" && action.startsWith("push-")) {
+    await pushCommand(user, body, res);
+    return;
+  }
 
   if (action === "update-all") {
     const { values, client } = await collectRetained(["smartmeter/+/status"], { prefix: "admin" });
@@ -131,13 +155,13 @@ module.exports = async (req, res) => {
     return;
   }
   if (!user) {
-    res.status(403).json({ error: admins().length ? "Akun ini bukan admin." : "Belum ada admin. Isi ADMIN_EMAILS di pengaturan Vercel." });
+    res.status(403).json({ error: push.adminEmails().length ? "Akun ini bukan admin." : "Belum ada admin. Isi ADMIN_EMAILS di pengaturan Vercel." });
     return;
   }
 
   try {
     if (req.method === "GET") await overview(req, res);
-    else if (req.method === "POST") await command(req, res);
+    else if (req.method === "POST") await command(req, res, user);
     else res.status(405).json({ error: "Gunakan GET atau POST." });
   } catch (err) {
     console.error("Admin request failed:", err);

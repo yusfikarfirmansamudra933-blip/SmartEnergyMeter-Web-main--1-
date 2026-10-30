@@ -203,6 +203,7 @@ function render() {
   renderSummary();
   renderList();
   show("content");
+  refreshNotif();
 }
 
 function focusIn(id, selector) {
@@ -306,7 +307,101 @@ async function updateAll() {
   btn.disabled = false;
 }
 
+// --- Notifikasi di perangkat ini (web push, lihat lib/push.js) ---
+
+const notif = { busy: false, synced: false };
+
+function notifSupported() {
+  return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window;
+}
+
+// Kunci VAPID publik (base64url) -> bentuk yang diminta pushManager.subscribe().
+function vapidKey(base64) {
+  const pad = "=".repeat((4 - (base64.length % 4)) % 4);
+  const raw = atob((base64 + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(raw, (c) => c.charCodeAt(0));
+}
+
+async function currentSubscription() {
+  const reg = await navigator.serviceWorker.ready;
+  return reg.pushManager.getSubscription();
+}
+
+function setNotif(status, buttons) {
+  $("notif-status").textContent = status;
+  // Tanpa tombol, pesan hasil aksi sebelumnya tidak berlaku lagi.
+  if (!buttons.length) setMsg("notif-msg", "");
+  $("btn-notif-on").hidden = !buttons.includes("on");
+  $("btn-notif-off").hidden = !buttons.includes("off");
+  $("btn-notif-test").hidden = !buttons.includes("test");
+  ["btn-notif-on", "btn-notif-off", "btn-notif-test"].forEach((id) => { $(id).disabled = notif.busy; });
+}
+
+async function refreshNotif() {
+  if (!notifSupported()) return setNotif("Browser ini tidak mendukung notifikasi. Pakai aplikasi SEM Admin atau Chrome di Android.", []);
+  if (!ui.data || !ui.data.vapidPublicKey) return setNotif("Notifikasi belum diaktifkan di server.", []);
+  if (Notification.permission === "denied") return setNotif("Notifikasi diblokir. Izinkan lewat pengaturan aplikasi atau browser, lalu muat ulang halaman ini.", []);
+  let sub = null;
+  try { sub = await currentSubscription(); } catch { /* service worker belum siap: dianggap mati */ }
+  if (sub && !notif.synced) {
+    // Dikirim ulang sekali per kunjungan, kalau-kalau server kehilangan langganan ini.
+    notif.synced = true;
+    api("POST", { action: "push-subscribe", subscription: sub.toJSON() }).catch(() => {});
+  }
+  setNotif(sub ? "Aktif di perangkat ini." : "Mati di perangkat ini.", sub ? ["test", "off"] : ["on"]);
+}
+
+async function notifAction(fn) {
+  notif.busy = true;
+  setMsg("notif-msg", "");
+  await refreshNotif();
+  try { await fn(); }
+  catch (err) { setMsg("notif-msg", (err && err.userText) || "Gagal. Periksa koneksi lalu coba lagi.", "bad"); }
+  notif.busy = false;
+  await refreshNotif();
+}
+
+function enableNotif() {
+  return notifAction(async () => {
+    const permission = await Notification.requestPermission();
+    if (permission !== "granted") {
+      setMsg("notif-msg", permission === "denied" ? "Izin notifikasi ditolak." : "Izin notifikasi belum diberikan.", "bad");
+      return;
+    }
+    const reg = await navigator.serviceWorker.ready;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: vapidKey(ui.data.vapidPublicKey) });
+    const { status, body } = await api("POST", { action: "push-subscribe", subscription: sub.toJSON() });
+    if (status !== 200) {
+      await sub.unsubscribe().catch(() => {});
+      throw Object.assign(new Error("subscribe"), { userText: body.error || "Server menolak pendaftaran notifikasi." });
+    }
+    notif.synced = true;
+    setMsg("notif-msg", "Notifikasi aktif. Coba tombol Kirim notifikasi uji.", "good");
+  });
+}
+
+function disableNotif() {
+  return notifAction(async () => {
+    const sub = await currentSubscription();
+    if (!sub) return;
+    await api("POST", { action: "push-unsubscribe", endpoint: sub.endpoint }).catch(() => {});
+    await sub.unsubscribe();
+    setMsg("notif-msg", "Notifikasi dimatikan di perangkat ini.", "good");
+  });
+}
+
+function testNotif() {
+  return notifAction(async () => {
+    const { status, body } = await api("POST", { action: "push-test" });
+    if (status !== 200) throw Object.assign(new Error("test"), { userText: body.error || "Notifikasi uji gagal dikirim." });
+    setMsg("notif-msg", body.sent ? "Terkirim. Notifikasi muncul dalam beberapa detik." : "Belum ada perangkat yang terdaftar. Aktifkan dulu, lalu coba lagi.", body.sent ? "good" : "bad");
+  });
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  $("btn-notif-on").addEventListener("click", enableNotif);
+  $("btn-notif-off").addEventListener("click", disableNotif);
+  $("btn-notif-test").addEventListener("click", testNotif);
   $("btn-refresh").addEventListener("click", load);
   $("btn-retry").addEventListener("click", load);
   $("btn-update-all").addEventListener("click", updateAll);

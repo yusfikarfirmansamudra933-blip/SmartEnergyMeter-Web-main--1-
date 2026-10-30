@@ -1,6 +1,9 @@
-const { DEVICE_RE, topic, chatTopic, safeParse, collectRetained, publishOn } = require("../lib/devices");
+const { DEVICE_RE, topic, chatTopic, safeParse, collectRetained, publishOn, publishAndWait } = require("../lib/devices");
 const Tariffs = require("../tariffs");
 const { ingest } = require("../lib/ingest");
+const db = require("../lib/supabase");
+const push = require("../lib/push");
+const { adminAlerts } = require("../lib/adminAlerts");
 
 // Triggered periodically by an external cron (cron-job.org, every few
 // minutes — Vercel Hobby only allows daily cron, see README). Each tick, for
@@ -23,6 +26,8 @@ const FILTERS = [
   "smartmeter/+/billing/#",
   "smartmeter/+/telegram/#",
   "smartmeter/_bot/chat/+",
+  "smartmeter/+/ota",
+  "smartmeter/_admin/alerts",
 ];
 
 // Topics from the single-device firmware (before 1.15.0). Carried over once
@@ -339,6 +344,22 @@ async function migrateLegacy(values, deviceValues, chats, client) {
   return id;
 }
 
+// Push notifications to the seller's phones (lib/adminAlerts.js decides what).
+// Runs after ingest so devices.last_seen is current.
+const ADMIN_ALERTS_TOPIC = "smartmeter/_admin/alerts";
+
+async function notifyAdmins(deviceValues, stateRaw) {
+  if (!push.pushEnabled()) return { skipped: "kunci VAPID belum diatur" };
+  const rows = await db.rest("devices?select=id,last_seen");
+  const lastSeen = Object.fromEntries((rows || []).filter((r) => r.last_seen).map((r) => [r.id, r.last_seen]));
+  const { notifications, state, changed } = adminAlerts(deviceValues, stateRaw, lastSeen);
+  let sent = 0;
+  for (const n of notifications) sent += await push.sendToAdmins(n);
+  // Saved even when no phone is subscribed, so old events don't all arrive at once later.
+  if (changed) await publishAndWait(ADMIN_ALERTS_TOPIC, JSON.stringify(state), { retain: true, prefix: "monitor" });
+  return { notifications: notifications.length, sent };
+}
+
 module.exports = async (req, res) => {
   const filters = [...FILTERS, ...Object.values(LEGACY), LEGACY_CHAT_ID];
   const { values, client } = await collectRetained(filters, { prefix: "monitor" });
@@ -377,5 +398,9 @@ module.exports = async (req, res) => {
   try { history = await ingest(deviceValues); }
   catch (err) { console.error("Supabase ingest failed:", err); history = { error: String(err.message || err) }; }
 
-  res.status(200).json({ ok: true, migratedTo, devices: results, history });
+  let admin = null;
+  try { admin = await notifyAdmins(deviceValues, values[ADMIN_ALERTS_TOPIC]); }
+  catch (err) { console.error("Admin alerts failed:", err); admin = { error: String(err.message || err) }; }
+
+  res.status(200).json({ ok: true, migratedTo, devices: results, history, admin });
 };
