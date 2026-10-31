@@ -1,0 +1,10 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "com.smartenergymeter.admin",
+      "sha256_cert_fingerprints": ["24:36:54:08:53:A7:B5:D3:B1:8F:93:F0:01:8D:BA:BD:F5:AA:7B:01:33:2B:F2:A6:70:E8:A0:30:06:BB:10:51"]
+    }
+  }
+]
