@@ -1,0 +1,12 @@
+node_modules/
+.gradle/
+build/
+app/build/
+local.properties
+# Signing key and outputs: never committed. Back the keystore up somewhere
+# safe; updates of the installed app must be signed with the same key.
+*.keystore
+*.jks
+*.apk
+*.aab
+*.idsig
