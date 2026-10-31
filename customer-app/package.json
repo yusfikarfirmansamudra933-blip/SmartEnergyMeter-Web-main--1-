@@ -1,0 +1,8 @@
+{
+  "name": "sem-customer-app",
+  "private": true,
+  "description": "Android (TWA) wrapper for the customer pages of web-remote (index.html), built with Bubblewrap.",
+  "devDependencies": {
+    "@bubblewrap/cli": "^1.27.0"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "packageId": "com.smartenergymeter.app",
+  "host": "web-remote-nine.vercel.app",
+  "name": "Smart Energy Meter",
+  "launcherName": "Energy Meter",
+  "display": "standalone",
+  "themeColor": "#059669",
+  "themeColorDark": "#059669",
+  "navigationColor": "#059669",
+  "navigationColorDark": "#059669",
+  "navigationDividerColor": "#059669",
+  "navigationDividerColorDark": "#059669",
+  "backgroundColor": "#F8FAFC",
+  "enableNotifications": false,
+  "startUrl": "/index.html",
+  "iconUrl": "https://web-remote-nine.vercel.app/icon-512.png",
+  "maskableIconUrl": "https://web-remote-nine.vercel.app/icon-maskable-512.png",
+  "splashScreenFadeOutDuration": 300,
+  "signingKey": {
+    "path": "../admin-app/admin-release.keystore",
+    "alias": "sem-admin"
+  },
+  "appVersionCode": 1,
+  "appVersionName": "1.0.0",
+  "shortcuts": [],
+  "generatorApp": "bubblewrap-cli",
+  "webManifestUrl": "https://web-remote-nine.vercel.app/manifest.json",
+  "fallbackType": "customtabs",
+  "features": {},
+  "alphaDependencies": {
+    "enabled": false
+  },
+  "enableSiteSettingsShortcut": true,
+  "isChromeOSOnly": false,
+  "isMetaQuest": false,
+  "fullScopeUrl": "https://web-remote-nine.vercel.app/",
+  "minSdkVersion": 24,
+  "orientation": "portrait",
+  "fingerprints": [],
+  "additionalTrustedOrigins": [],
+  "retainedBundles": []
+}
