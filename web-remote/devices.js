@@ -341,7 +341,15 @@ async function runPendingClaim() {
   $("add-msg").focus();
 }
 
+// The APK opens this site in standalone mode, so a standalone page is already the app (or the installed web app).
+function showAppDownload() {
+  const android = /Android/i.test(navigator.userAgent);
+  const standalone = window.matchMedia("(display-mode: standalone)").matches || document.referrer.startsWith("android-app://");
+  $("app-download").hidden = !android || standalone;
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  showAppDownload();
   if (!Account.available) {
     $("account-loading").hidden = true;
     $("account-unavailable").hidden = false;

@@ -109,6 +109,18 @@
 
     <p class="rounded-xl bg-card border border-line p-5 text-small text-bad-ink" hidden id="account-unavailable">Layanan akun tidak bisa dimuat. Periksa koneksi internet lalu muat ulang halaman.</p>
 
+    <!-- Hanya di browser Android yang belum membuka halaman ini dari aplikasinya (devices.js): APK tidak berguna di iPhone atau laptop. -->
+    <section aria-labelledby="h-aplikasi" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" hidden id="app-download">
+      <div class="flex flex-col gap-1">
+        <h2 class="text-title text-ink" id="h-aplikasi">Aplikasi Android</h2>
+        <p class="text-small text-ink-2">Pasang Energy Meter supaya meter Anda terbuka dari ikon di layar HP, tanpa mengetik alamat. Saat memasang, izinkan instal dari sumber ini jika Android memintanya.</p>
+      </div>
+      <a class="w-full min-h-[44px] px-4 rounded-lg bg-card border border-line text-ink hover:bg-inset font-semibold transition-colors inline-flex items-center justify-center gap-2" download href="download/energy-meter.apk">
+        <span aria-hidden="true" class="material-symbols-outlined text-[20px]">download</span>
+        <span>Unduh aplikasi Android</span>
+      </a>
+    </section>
+
     <div class="flex flex-wrap gap-x-5">
       <a class="min-h-[44px] inline-flex items-center text-small text-ink-2 underline underline-offset-2 hover:text-ink" href="privacy.html">Kebijakan privasi</a>
       <!-- Hanya muncul untuk akun di ADMIN_EMAILS (dicek di api/admin). -->
