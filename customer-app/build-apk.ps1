@@ -38,4 +38,6 @@ Write-Host "`n== Tanda tangan APK. Ketik password kunci saat diminta." -Foregrou
 if ($LASTEXITCODE -ne 0) { throw 'Tanda tangan gagal (password salah?).' }
 Remove-Item app-release-aligned.apk
 
-Write-Host "`nSelesai: app-release-signed.apk" -ForegroundColor Green
+# Served as the public download link after the next deploy of web-remote.
+Copy-Item app-release-signed.apk ..\web-remote\download\energy-meter.apk -Force
+Write-Host "`nSelesai: app-release-signed.apk (disalin ke web-remote\download\energy-meter.apk, deploy untuk memperbarui link unduhan)" -ForegroundColor Green
