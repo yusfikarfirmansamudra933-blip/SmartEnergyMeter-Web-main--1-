@@ -213,6 +213,7 @@ function renderMonthTabs() {
     btn.addEventListener("click", () => {
       selectedMonth = m;
       renderMonthTabs();
+      renderReport();
       renderWeekCards();
     });
     container.appendChild(btn);
@@ -267,6 +268,113 @@ function renderWeekCards() {
   }
 }
 
+// --- Ringkasan bulan (kartu di bawah tab bulan, juga bagian Ringkasan di Excel/PDF) ---
+
+// "loading" sampai data tagihan retained datang, "error" kalau broker gagal sebelum itu.
+let billingState = "loading";
+
+function setBillingState(state) {
+  if (billingState === state) return;
+  billingState = state;
+  renderReport();
+}
+
+// Bulan berjalan dihitung sampai hari ini; perbandingannya memakai periode tanggal
+// yang sama di bulan lalu, sama seperti lencana di kartu atas.
+function monthReport(year, monthIndex) {
+  const now = new Date();
+  if (new Date(year, monthIndex, 1) > now) return { future: true };
+  const isCurrent = year === now.getFullYear() && monthIndex === now.getMonth();
+  const lastDay = isCurrent ? now.getDate() : new Date(year, monthIndex + 1, 0).getDate();
+
+  let days = 0, sumRp = 0, sumKwh = 0, peak = null;
+  for (let d = 1; d <= lastDay; d++) {
+    const date = new Date(year, monthIndex, d);
+    const rp = Number(dailyData[dayKey(date)] || 0);
+    const kwh = dayKwh(date);
+    if (rp <= 0 && !(kwh > 0)) continue;
+    days++;
+    sumRp += rp;
+    sumKwh += kwh;
+    if (!peak || kwh > peak.kwh) peak = { date, kwh, rp };
+  }
+
+  const prev = new Date(year, monthIndex - 1, 1);
+  const prevName = monthNames[prev.getMonth()];
+  const rp = getMonthTotal(year, monthIndex);
+  let change;
+  if (isCurrent) {
+    change = computeComparisonPercent(year, monthIndex, now.getDate());
+  } else {
+    const prevRp = getMonthTotal(prev.getFullYear(), prev.getMonth());
+    change = prevRp > 0 && rp > 0 ? ((rp - prevRp) / prevRp) * 100 : null;
+  }
+
+  return {
+    empty: rp <= 0 && days === 0,
+    rp,
+    kwh: monthKwh(year, monthIndex),
+    days,
+    avgRp: days ? sumRp / days : 0,
+    avgKwh: days ? sumKwh / days : 0,
+    peak,
+    change,
+    compareLabel: isCurrent ? `Dibanding ${prevName}, tanggal 1-${now.getDate()}` : `Dibanding ${prevName}`,
+    prevName,
+  };
+}
+
+function reportPeakText(peak) {
+  const date = peak.date.toLocaleDateString("id-ID", { weekday: "short", day: "numeric", month: "short" });
+  return `${date}: ${peak.kwh.toFixed(2)} kWh (${formatRupiah(peak.rp)})`;
+}
+
+function reportChangeText(r) {
+  if (r.change === null) return `Belum ada data ${r.prevName}`;
+  return r.change <= 0 ? `Lebih hemat ${Math.abs(r.change).toFixed(1)}%` : `Naik ${r.change.toFixed(1)}%`;
+}
+
+function renderReport() {
+  const year = selectedYear, month = selectedMonth;
+  const status = $("report-status");
+  const body = $("report-body");
+  $("report-title").textContent = `Ringkasan ${monthNames[month]} ${year}`;
+  const show = (text) => { status.textContent = text; status.hidden = false; body.hidden = true; };
+
+  if (!DEVICE_ID) return show("Pilih perangkat dulu untuk melihat laporannya.");
+  if (billingState === "error") return show("Data tagihan belum bisa dimuat. Periksa koneksi internet; halaman ini mencoba lagi sendiri.");
+  if (billingState === "loading") return show("Memuat data tagihan...");
+  const r = monthReport(year, month);
+  if (r.future) return show(`${monthNames[month]} ${year} belum berjalan.`);
+  if (r.empty) return show(`Belum ada data tagihan untuk ${monthNames[month]} ${year}.`);
+
+  status.hidden = true;
+  body.hidden = false;
+  $("report-rp").textContent = formatRupiah(r.rp);
+  $("report-kwh").textContent = `${r.kwh.toFixed(2)} kWh`;
+  $("report-avg-label").textContent = `Rata-rata per hari (${r.days} hari tercatat)`;
+  $("report-avg").textContent = `${formatRupiah(r.avgRp)} (${r.avgKwh.toFixed(2)} kWh)`;
+  $("report-peak").textContent = reportPeakText(r.peak);
+  $("report-compare-label").textContent = r.compareLabel;
+  const compare = $("report-compare");
+  compare.textContent = reportChangeText(r);
+  compare.className = `text-body font-semibold num text-right ${r.change === null ? "text-ink-2" : r.change <= 0 ? "text-accent-ink" : "text-warn-ink"}`;
+}
+
+// Baris [label, nilai] untuk bagian Ringkasan di file unduhan.
+function reportRows(year, monthIndex) {
+  const r = monthReport(year, monthIndex);
+  if (r.future || r.empty) return [["Keterangan", `Belum ada data tagihan untuk ${monthNames[monthIndex]} ${year}.`]];
+  return [
+    ["Total biaya", formatRupiah(r.rp)],
+    ["Pemakaian", `${r.kwh.toFixed(2)} kWh`],
+    [`Rata-rata per hari (${r.days} hari tercatat)`, `${formatRupiah(r.avgRp)} (${r.avgKwh.toFixed(2)} kWh)`],
+    ["Hari paling boros", reportPeakText(r.peak)],
+    [r.compareLabel, reportChangeText(r)],
+    ["Tarif saat ini", rupiahPerKwh(getElectricityRate())],
+  ];
+}
+
 // --- Ekspor Excel / PDF (untuk bulan yang sedang dipilih di tab) ---
 
 function downloadMonthExcel() {
@@ -316,7 +424,11 @@ function downloadMonthExcel() {
   sheet["!cols"] = [{ wch: 22 }, { wch: 16 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 14 }];
   sheet["!merges"] = merges;
 
+  const summary = XLSX.utils.aoa_to_sheet([[`Ringkasan ${monthNames[monthIndex]} ${year}`, ""], ...reportRows(year, monthIndex)]);
+  summary["!cols"] = [{ wch: 40 }, { wch: 36 }];
+
   const workbook = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(workbook, summary, "Ringkasan");
   XLSX.utils.book_append_sheet(workbook, sheet, "Rincian");
   XLSX.writeFile(workbook, `Tagihan-${monthNames[monthIndex]}-${year}.xlsx`);
 }
@@ -367,7 +479,14 @@ function downloadMonthPdf() {
   body.push(["Total Bulan", "", "", "", "", "", "", "", "", formatRupiah(grandTotal)]);
 
   doc.autoTable({
-    head, body, startY: 22,
+    body: reportRows(year, monthIndex), startY: 22,
+    theme: "plain",
+    styles: { fontSize: 10, cellPadding: 1.5 },
+    columnStyles: { 0: { cellWidth: 80 }, 1: { fontStyle: "bold" } },
+  });
+
+  doc.autoTable({
+    head, body, startY: doc.lastAutoTable.finalY + 8,
     styles: { fontSize: 8, cellPadding: 2, valign: "middle" },
     headStyles: { fillColor: [20, 138, 67] },
     columnStyles: { 0: { cellWidth: 40 }, 1: { cellWidth: 30 } },
@@ -517,6 +636,7 @@ function renderAll() {
   renderHero();
   renderInsight();
   renderTrendBars();
+  renderReport();
   renderWeekCards();
 }
 
@@ -546,11 +666,19 @@ function connectMQTT() {
     // Retained: datang seketika kalau alat ini punya golongan tersimpan. Kalau tidak
     // ada yang datang dalam beberapa detik, alat ini memakai tarif awal.
     mqttClient.subscribe(TOPIC_TARIFF);
-    setTimeout(() => { if (!tariffKnown) { tariffKnown = true; renderTariffCard(); renderAll(); } }, 3000);
+    // Alat baru belum punya tagihan retained sama sekali: tanpa pesan, bulan-bulannya kosong.
+    setTimeout(() => {
+      if (!tariffKnown) { tariffKnown = true; renderTariffCard(); renderAll(); }
+      if (billingState !== "ready") setBillingState("ready");
+    }, 3000);
   });
+  const lost = (label) => {
+    setBrokerState(label, false);
+    if (billingState === "loading") setBillingState("error");
+  };
   mqttClient.on("reconnect", () => setBrokerState("Mencoba ulang", false));
-  mqttClient.on("close", () => setBrokerState("Terputus", false));
-  mqttClient.on("error", () => setBrokerState("Koneksi bermasalah", false));
+  mqttClient.on("close", () => lost("Terputus"));
+  mqttClient.on("error", () => lost("Koneksi bermasalah"));
   mqttClient.on("message", (topic, message) => {
     if (topic === TOPIC_TARIFF) { applyTariff(message.toString()); renderAll(); return; }
     try {
@@ -560,6 +688,7 @@ function connectMQTT() {
       else if (topic === TOPIC_BILLING_DAILY_KWH) dailyKwhData = parsed;
       else if (topic === TOPIC_BILLING_WEEKLY_KWH) weeklyKwhData = parsed;
       else return;
+      billingState = "ready";
       renderAll();
     } catch { /* ignore malformed packet */ }
   });

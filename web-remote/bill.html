@@ -150,17 +150,50 @@
 
     <section aria-labelledby="h-minggu" class="flex flex-col gap-3">
       <div class="flex flex-col">
-        <span class="font-mono text-label uppercase text-ink-2">Rincian mingguan</span>
+        <span class="font-mono text-label uppercase text-ink-2">Laporan bulanan</span>
         <h2 class="text-title text-ink" id="h-minggu">Pilih bulan</h2>
       </div>
       <div aria-label="Pilih bulan" class="flex items-center gap-1 overflow-x-auto pb-1" id="month-tabs" role="group"></div>
+
+      <!-- Ringkasan bulan yang dipilih di tab; isinya sama dengan bagian Ringkasan di Excel dan PDF. -->
+      <div aria-labelledby="report-title" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3" id="month-report" role="region">
+        <h3 class="text-title text-ink" id="report-title">-</h3>
+        <p aria-live="polite" class="text-small text-ink-2" id="report-status" role="status">Memuat data tagihan...</p>
+        <div class="flex flex-col gap-3" hidden id="report-body">
+          <div class="grid grid-cols-2 gap-3">
+            <div class="flex flex-col min-w-0">
+              <span class="font-mono text-label uppercase text-ink-2">Total biaya</span>
+              <span class="text-headline text-ink num" id="report-rp">-</span>
+            </div>
+            <div class="flex flex-col min-w-0">
+              <span class="font-mono text-label uppercase text-ink-2">Pemakaian</span>
+              <span class="text-headline text-ink num" id="report-kwh">-</span>
+            </div>
+          </div>
+          <dl class="flex flex-col gap-1">
+            <div class="rounded-lg bg-inset px-3 py-2 flex flex-wrap items-baseline justify-between gap-x-3">
+              <dt class="text-small text-ink-2" id="report-avg-label">Rata-rata per hari</dt>
+              <dd class="text-body text-ink font-semibold num" id="report-avg">-</dd>
+            </div>
+            <div class="rounded-lg bg-inset px-3 py-2 flex flex-wrap items-baseline justify-between gap-x-3">
+              <dt class="text-small text-ink-2">Hari paling boros</dt>
+              <dd class="text-body text-ink font-semibold num text-right" id="report-peak">-</dd>
+            </div>
+            <div class="rounded-lg bg-inset px-3 py-2 flex flex-wrap items-baseline justify-between gap-x-3">
+              <dt class="text-small text-ink-2" id="report-compare-label">Dibanding bulan lalu</dt>
+              <dd class="text-body font-semibold num text-right" id="report-compare">-</dd>
+            </div>
+          </dl>
+        </div>
+      </div>
+
       <div class="flex flex-col gap-1" id="weekCards"></div>
     </section>
 
     <section aria-labelledby="h-ekspor" class="bg-card rounded-xl p-5 border border-line flex flex-col gap-3">
       <div class="flex flex-col gap-1">
         <h2 class="text-title text-ink" id="h-ekspor">Unduh dokumen tagihan</h2>
-        <p class="text-small text-ink-2">Rincian harian dan mingguan untuk bulan yang sedang dipilih di atas.</p>
+        <p class="text-small text-ink-2">Ringkasan serta rincian harian dan mingguan untuk bulan yang sedang dipilih di atas.</p>
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-2">
         <button class="w-full min-h-[44px] rounded-lg bg-inset hover:opacity-90 active:opacity-80 p-3 flex items-center gap-3 text-left transition-opacity" id="downloadExcelBtn" type="button">
@@ -169,7 +202,7 @@
         </button>
         <button class="w-full min-h-[44px] rounded-lg bg-inset hover:opacity-90 active:opacity-80 p-3 flex items-center gap-3 text-left transition-opacity" id="downloadPdfBtn" type="button">
           <span aria-hidden="true" class="material-symbols-outlined text-[22px] text-ink-2">description</span>
-          <span class="flex flex-col"><span class="text-body text-ink font-semibold">Unduh PDF (.pdf)</span><span class="font-mono text-small text-ink-2">Tabel tagihan per minggu</span></span>
+          <span class="flex flex-col"><span class="text-body text-ink font-semibold">Unduh PDF (.pdf)</span><span class="font-mono text-small text-ink-2">Ringkasan dan tabel per minggu</span></span>
         </button>
       </div>
     </section>
